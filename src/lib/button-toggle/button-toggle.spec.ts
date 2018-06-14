@@ -1,13 +1,13 @@
-import {fakeAsync, tick, ComponentFixture, TestBed} from '@angular/core/testing';
 import {dispatchMouseEvent} from '@angular/cdk/testing';
-import {NgModel, FormsModule, ReactiveFormsModule, FormControl} from '@angular/forms';
-import {Component, DebugElement, ViewChild, ViewChildren, QueryList} from '@angular/core';
+import {Component, DebugElement, QueryList, ViewChild, ViewChildren} from '@angular/core';
+import {ComponentFixture, fakeAsync, flush, TestBed, tick} from '@angular/core/testing';
+import {FormControl, FormsModule, NgModel, ReactiveFormsModule} from '@angular/forms';
 import {By} from '@angular/platform-browser';
 import {
-  MatButtonToggleGroup,
-  MatButtonToggleGroupMultiple,
   MatButtonToggle,
   MatButtonToggleChange,
+  MatButtonToggleGroup,
+  MatButtonToggleGroupMultiple,
   MatButtonToggleModule,
 } from './index';
 
@@ -205,6 +205,7 @@ describe('MatButtonToggle without forms', () => {
       declarations: [
         ButtonTogglesInsideButtonToggleGroup,
         ButtonTogglesInsideButtonToggleGroupMultiple,
+        FalsyButtonTogglesInsideButtonToggleGroupMultiple,
         ButtonToggleGroupWithInitialValue,
         StandaloneButtonToggle,
         ButtonToggleWithAriaLabel,
@@ -574,13 +575,14 @@ describe('MatButtonToggle without forms', () => {
 
     it('should toggle when clicked', fakeAsync(() => {
       buttonToggleLabelElement.click();
-
       fixture.detectChanges();
+      flush();
 
       expect(buttonToggleInstance.checked).toBe(true);
 
       buttonToggleLabelElement.click();
       fixture.detectChanges();
+      flush();
 
       expect(buttonToggleInstance.checked).toBe(false);
     }));
@@ -693,6 +695,22 @@ describe('MatButtonToggle without forms', () => {
       expect(fixture.componentInstance.toggleGroup.value).toBe('Seven');
       expect(fixture.componentInstance.toggles.toArray()[2].checked).toBe(true);
     });
+
+  it('should select falsy button toggle value in multiple selection', () => {
+    const fixture = TestBed.createComponent(FalsyButtonTogglesInsideButtonToggleGroupMultiple);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.toggles.toArray()[0].checked).toBe(true);
+    expect(fixture.componentInstance.toggles.toArray()[1].checked).toBe(false);
+    expect(fixture.componentInstance.toggles.toArray()[2].checked).toBe(false);
+
+    fixture.componentInstance.value = [0, false];
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.toggles.toArray()[0].checked).toBe(true);
+    expect(fixture.componentInstance.toggles.toArray()[1].checked).toBe(false);
+    expect(fixture.componentInstance.toggles.toArray()[2].checked).toBe(true);
+  });
 });
 
 @Component({
@@ -745,6 +763,21 @@ class ButtonToggleGroupWithNgModel {
 class ButtonTogglesInsideButtonToggleGroupMultiple {
   isGroupDisabled: boolean = false;
   isVertical: boolean = false;
+}
+
+@Component({
+  template: `
+  <mat-button-toggle-group multiple [value]="value">
+    <mat-button-toggle [value]="0">Eggs</mat-button-toggle>
+    <mat-button-toggle [value]="null">Flour</mat-button-toggle>
+    <mat-button-toggle [value]="false">Sugar</mat-button-toggle>
+    <mat-button-toggle>Sugar</mat-button-toggle>
+  </mat-button-toggle-group>
+  `
+})
+class FalsyButtonTogglesInsideButtonToggleGroupMultiple {
+  value: ('' | number | null | undefined | boolean)[] = [0];
+  @ViewChildren(MatButtonToggle) toggles: QueryList<MatButtonToggle>;
 }
 
 @Component({

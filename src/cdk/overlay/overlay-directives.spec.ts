@@ -91,7 +91,10 @@ describe('Overlay directives', () => {
     fixture.componentInstance.isOpen = true;
     fixture.detectChanges();
 
-    expect(getPaneElement().getAttribute('dir')).toBe('rtl');
+    let boundingBox =
+        overlayContainerElement.querySelector('.cdk-overlay-connected-position-bounding-box')!;
+
+    expect(boundingBox.getAttribute('dir')).toBe('rtl');
 
     fixture.componentInstance.isOpen = false;
     fixture.detectChanges();
@@ -100,7 +103,10 @@ describe('Overlay directives', () => {
     fixture.componentInstance.isOpen = true;
     fixture.detectChanges();
 
-    expect(getPaneElement().getAttribute('dir')).toBe('ltr');
+    boundingBox =
+        overlayContainerElement.querySelector('.cdk-overlay-connected-position-bounding-box')!;
+
+    expect(boundingBox.getAttribute('dir')).toBe('ltr');
   });
 
   it('should close when pressing escape', () => {
@@ -359,6 +365,42 @@ describe('Overlay directives', () => {
       expect(Math.floor(overlayRect.left)).toBe(Math.floor(triggerRect.left) + 20);
     });
 
+    it('should be able to set the viewport margin', () => {
+      expect(fixture.componentInstance.connectedOverlayDirective.viewportMargin).not.toBe(10);
+
+      fixture.componentInstance.viewportMargin = 10;
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.connectedOverlayDirective.viewportMargin).toBe(10);
+    });
+
+    it('should allow for flexible positioning to be enabled', () => {
+      expect(fixture.componentInstance.connectedOverlayDirective.flexibleDiemsions).not.toBe(true);
+
+      fixture.componentInstance.flexibleDimensions = true;
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.connectedOverlayDirective.flexibleDiemsions).toBe(true);
+    });
+
+    it('should allow for growing after open to be enabled', () => {
+      expect(fixture.componentInstance.connectedOverlayDirective.growAfterOpen).not.toBe(true);
+
+      fixture.componentInstance.growAfterOpen = true;
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.connectedOverlayDirective.growAfterOpen).toBe(true);
+    });
+
+    it('should allow for pushing to be enabled', () => {
+      expect(fixture.componentInstance.connectedOverlayDirective.push).not.toBe(true);
+
+      fixture.componentInstance.push = true;
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.connectedOverlayDirective.push).toBe(true);
+    });
+
   });
 
   describe('outputs', () => {
@@ -421,6 +463,10 @@ describe('Overlay directives', () => {
             [cdkConnectedOverlayHeight]="height"
             [cdkConnectedOverlayOrigin]="triggerOverride || trigger"
             [cdkConnectedOverlayHasBackdrop]="hasBackdrop"
+            [cdkConnectedOverlayViewportMargin]="viewportMargin"
+            [cdkConnectedOverlayFlexibleDimensions]="flexibleDimensions"
+            [cdkConnectedOverlayGrowAfterOpen]="growAfterOpen"
+            [cdkConnectedOverlayPush]="push"
             cdkConnectedOverlayBackdropClass="mat-test-class"
             (backdropClick)="backdropClickHandler($event)"
             [cdkConnectedOverlayOffsetX]="offsetX"
@@ -448,6 +494,10 @@ class ConnectedOverlayDirectiveTest {
   offsetY: number;
   triggerOverride: CdkOverlayOrigin;
   hasBackdrop: boolean;
+  viewportMargin: number;
+  flexibleDimensions: boolean;
+  growAfterOpen: boolean;
+  push: boolean;
   backdropClickHandler = jasmine.createSpy('backdropClick handler');
   positionChangeHandler = jasmine.createSpy('positionChangeHandler');
   positionOverrides: ConnectionPositionPair[];

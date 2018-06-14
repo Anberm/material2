@@ -9,12 +9,14 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  Inject,
   Input,
   ElementRef,
   ViewEncapsulation,
   Optional,
-  Inject,
+  InjectionToken,
 } from '@angular/core';
+import {ANIMATION_MODULE_TYPE} from '@angular/platform-browser/animations';
 import {CanColor, mixinColor} from '@angular/material/core';
 import {Platform} from '@angular/cdk/platform';
 import {DOCUMENT} from '@angular/common';
@@ -41,6 +43,26 @@ export class MatProgressSpinnerBase {
   constructor(public _elementRef: ElementRef) {}
 }
 export const _MatProgressSpinnerMixinBase = mixinColor(MatProgressSpinnerBase, 'primary');
+
+/** Default `mat-progress-spinner` options that can be overridden. */
+export interface MatProgressSpinnerDefaultOptions {
+  /** Diameter of the spinner. */
+  diameter?: number;
+  /** Width of the spinner's stroke. */
+  strokeWidth?: number;
+}
+
+/** Injection token to be used to override the default options for `mat-progress-spinner`. */
+export const MAT_PROGRESS_SPINNER_DEFAULT_OPTIONS =
+    new InjectionToken<MatProgressSpinnerDefaultOptions>('mat-progress-spinner-default-options', {
+      providedIn: 'root',
+      factory: MAT_PROGRESS_SPINNER_DEFAULT_OPTIONS_FACTORY,
+    });
+
+/** @docs-private */
+export function MAT_PROGRESS_SPINNER_DEFAULT_OPTIONS_FACTORY(): MatProgressSpinnerDefaultOptions {
+  return {diameter: BASE_SIZE};
+}
 
 // .0001 percentage difference is necessary in order to avoid unwanted animation frames
 // for example because the animation duration is 4 seconds, .1% accounts to 4ms
@@ -80,6 +102,7 @@ const INDETERMINATE_ANIMATION_TEMPLATE = `
   host: {
     'role': 'progressbar',
     'class': 'mat-progress-spinner',
+    '[class._mat-animation-noopable]': `_animationMode === 'NoopAnimations'`,
     '[style.width.px]': 'diameter',
     '[style.height.px]': 'diameter',
     '[attr.aria-valuemin]': 'mode === "determinate" ? 0 : null',
@@ -129,7 +152,6 @@ export class MatProgressSpinner extends _MatProgressSpinnerMixinBase implements 
     this._strokeWidth = coerceNumberProperty(value);
   }
 
-
   /** Mode of the progress circle */
   @Input() mode: ProgressSpinnerMode = 'determinate';
 
@@ -144,10 +166,24 @@ export class MatProgressSpinner extends _MatProgressSpinnerMixinBase implements 
 
   constructor(public _elementRef: ElementRef,
               platform: Platform,
-              @Optional() @Inject(DOCUMENT) private _document: any) {
+              @Optional() @Inject(DOCUMENT) private _document: any,
+              // @deletion-target 7.0.0 _animationMode and defaults parameters to be made required.
+              @Optional() @Inject(ANIMATION_MODULE_TYPE) public _animationMode?: string,
+              @Inject(MAT_PROGRESS_SPINNER_DEFAULT_OPTIONS)
+                  defaults?: MatProgressSpinnerDefaultOptions) {
 
     super(_elementRef);
     this._fallbackAnimation = platform.EDGE || platform.TRIDENT;
+
+    if (defaults) {
+      if (defaults.diameter) {
+        this.diameter = defaults.diameter;
+      }
+
+      if (defaults.strokeWidth) {
+        this.strokeWidth = defaults.strokeWidth;
+      }
+    }
 
     // On IE and Edge, we can't animate the `stroke-dashoffset`
     // reliably so we fall back to a non-spec animation.
@@ -233,6 +269,7 @@ export class MatProgressSpinner extends _MatProgressSpinnerMixinBase implements 
     'role': 'progressbar',
     'mode': 'indeterminate',
     'class': 'mat-spinner mat-progress-spinner',
+    '[class._mat-animation-noopable]': `_animationMode === 'NoopAnimations'`,
     '[style.width.px]': 'diameter',
     '[style.height.px]': 'diameter',
   },
@@ -244,8 +281,12 @@ export class MatProgressSpinner extends _MatProgressSpinnerMixinBase implements 
 })
 export class MatSpinner extends MatProgressSpinner {
   constructor(elementRef: ElementRef, platform: Platform,
-              @Optional() @Inject(DOCUMENT) document: any) {
-    super(elementRef, platform, document);
+              @Optional() @Inject(DOCUMENT) document: any,
+              // @deletion-targets 7.0.0 animationMode and defaults parameters to be made required.
+              @Optional() @Inject(ANIMATION_MODULE_TYPE) animationMode?: string,
+              @Inject(MAT_PROGRESS_SPINNER_DEFAULT_OPTIONS)
+                  defaults?: MatProgressSpinnerDefaultOptions) {
+    super(elementRef, platform, document, animationMode, defaults);
     this.mode = 'indeterminate';
   }
 }

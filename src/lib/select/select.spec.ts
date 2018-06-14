@@ -86,7 +86,7 @@ describe('MatSelect', () => {
    * overall test time.
    * @param declarations Components to declare for this block
    */
-  function configureMatSelectTestingModule(declarations) {
+  function configureMatSelectTestingModule(declarations: any[]) {
     TestBed.configureTestingModule({
       imports: [
         MatFormFieldModule,
@@ -702,6 +702,29 @@ describe('MatSelect', () => {
             expect(host.getAttribute('aria-activedescendant')).toBe(options[0].id);
           }));
 
+        it('should restore focus to the trigger after selecting an option in multi-select mode',
+          fakeAsync(() => {
+            fixture.destroy();
+
+            const multiFixture = TestBed.createComponent(MultiSelect);
+            const instance = multiFixture.componentInstance;
+
+            multiFixture.detectChanges();
+            select = multiFixture.debugElement.query(By.css('mat-select')).nativeElement;
+            instance.select.open();
+            multiFixture.detectChanges();
+
+            // Ensure that the select isn't focused to begin with.
+            select.blur();
+            expect(document.activeElement).not.toBe(select, 'Expected trigger not to be focused.');
+
+            const option = overlayContainerElement.querySelector('mat-option')! as HTMLElement;
+            option.click();
+            multiFixture.detectChanges();
+
+            expect(document.activeElement).toBe(select, 'Expected trigger to be focused.');
+          }));
+
       });
 
       describe('for options', () => {
@@ -889,6 +912,25 @@ describe('MatSelect', () => {
         expect(fixture.componentInstance.select.panelOpen).toBe(false);
       }));
 
+      it('should restore focus to the host before tabbing away', fakeAsync(() => {
+        const select = fixture.nativeElement.querySelector('.mat-select');
+
+        trigger.click();
+        fixture.detectChanges();
+        flush();
+
+        expect(fixture.componentInstance.select.panelOpen).toBe(true);
+
+        // Use a spy since focus can be flaky in unit tests.
+        spyOn(select, 'focus').and.callThrough();
+
+        dispatchKeyboardEvent(trigger, 'keydown', TAB);
+        fixture.detectChanges();
+        flush();
+
+        expect(select.focus).toHaveBeenCalled();
+      }));
+
       it('should close when tabbing out from inside the panel', fakeAsync(() => {
         trigger.click();
         fixture.detectChanges();
@@ -1052,6 +1094,23 @@ describe('MatSelect', () => {
         expect(fixture.componentInstance.options.first.selected).toBe(true);
         expect(fixture.componentInstance.select.selected)
             .toBe(fixture.componentInstance.options.first);
+      }));
+
+      it('should be able to select an option using the MatOption API', fakeAsync(() => {
+        trigger.click();
+        fixture.detectChanges();
+        flush();
+
+        const optionInstances = fixture.componentInstance.options.toArray();
+        const optionNodes: NodeListOf<HTMLElement> =
+            overlayContainerElement.querySelectorAll('mat-option');
+
+        optionInstances[1].select();
+        fixture.detectChanges();
+
+        expect(optionNodes[1].classList).toContain('mat-selected');
+        expect(optionInstances[1].selected).toBe(true);
+        expect(fixture.componentInstance.select.selected).toBe(optionInstances[1]);
       }));
 
       it('should deselect other options when one is selected', fakeAsync(() => {
@@ -2791,7 +2850,9 @@ describe('MatSelect', () => {
       const rawYOrigin = selectInstance._transformOrigin.split(' ')[1].trim();
       const origin = Math.floor(parseInt(rawYOrigin));
 
-      expect(origin).toBe(expectedOrigin,
+      // Because the origin depends on the Y axis offset, we also have to
+      // round down and check that the difference is within a pixel.
+      expect(Math.abs(expectedOrigin - origin) < 2).toBe(true,
           `Expected panel animation to originate in the center of option ${index}.`);
     }
 

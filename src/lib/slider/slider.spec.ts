@@ -480,6 +480,27 @@ describe('MatSlider', () => {
 
       expect(sliderDebugElement.componentInstance.displayValue).toBe(100);
     });
+
+    it('should truncate long decimal values when using a decimal step', () => {
+      fixture.componentInstance.step = 0.1;
+      fixture.detectChanges();
+
+      dispatchSlideEventSequence(sliderNativeElement, 0, 0.333333, gestureConfig);
+
+      expect(sliderInstance.value).toBe(33.3);
+    });
+
+    it('should truncate long decimal values when using a decimal step and the arrow keys', () => {
+      fixture.componentInstance.step = 0.1;
+      fixture.detectChanges();
+
+      for (let i = 0; i < 3; i++) {
+        dispatchKeyboardEvent(sliderNativeElement, 'keydown', UP_ARROW);
+      }
+
+      expect(sliderInstance.value).toBe(0.3);
+    });
+
   });
 
   describe('slider with auto ticks', () => {

@@ -1,8 +1,8 @@
-import {async, ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
-import {Component, QueryList, ViewChild, ViewChildren} from '@angular/core';
-import {BrowserAnimationsModule, NoopAnimationsModule} from '@angular/platform-browser/animations';
-import {By} from '@angular/platform-browser';
 import {dispatchFakeEvent} from '@angular/cdk/testing';
+import {Component, OnInit, QueryList, ViewChild, ViewChildren} from '@angular/core';
+import {async, ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
+import {By} from '@angular/platform-browser';
+import {BrowserAnimationsModule, NoopAnimationsModule} from '@angular/platform-browser/animations';
 import {Observable} from 'rxjs';
 import {MatTab, MatTabGroup, MatTabHeaderPosition, MatTabsModule} from './index';
 
@@ -221,6 +221,16 @@ describe('MatTabGroup', () => {
 
       expect(fixture.componentInstance.animationDone).toHaveBeenCalled();
     }));
+
+    it('should add the proper `aria-setsize` and `aria-posinset`', () => {
+      fixture.detectChanges();
+
+      const labels = Array.from(element.querySelectorAll('.mat-tab-label'));
+
+      expect(labels.map(label => label.getAttribute('aria-posinset'))).toEqual(['1', '2', '3']);
+      expect(labels.every(label => label.getAttribute('aria-setsize') === '3')).toBe(true);
+    });
+
   });
 
   describe('disable tabs', () => {
@@ -584,7 +594,7 @@ class DisabledTabsTestApp {
    </mat-tab-group>
   `
 })
-class AsyncTabsTestApp {
+class AsyncTabsTestApp implements OnInit {
   private _tabs = [
     { label: 'one', content: 'one' },
     { label: 'two', content: 'two' }

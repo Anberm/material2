@@ -9,7 +9,7 @@
 import {FocusableOption, FocusKeyManager} from '@angular/cdk/a11y';
 import {coerceBooleanProperty} from '@angular/cdk/coercion';
 import {SelectionModel} from '@angular/cdk/collections';
-import {SPACE, ENTER, HOME, END, UP_ARROW, DOWN_ARROW} from '@angular/cdk/keycodes';
+import {SPACE, ENTER, HOME, END, UP_ARROW, DOWN_ARROW, A} from '@angular/cdk/keycodes';
 import {
   AfterContentInit,
   Attribute,
@@ -221,10 +221,10 @@ export class MatListOption extends _MatListOptionMixinBase
     return this._element.nativeElement;
   }
 
-  /** Sets the selected state of the option. */
-  _setSelected(selected: boolean) {
+  /** Sets the selected state of the option. Returns whether the value has changed. */
+  _setSelected(selected: boolean): boolean {
     if (selected === this._selected) {
-      return;
+      return false;
     }
 
     this._selected = selected;
@@ -236,6 +236,7 @@ export class MatListOption extends _MatListOptionMixinBase
     }
 
     this._changeDetector.markForCheck();
+    return true;
   }
 }
 
@@ -302,7 +303,6 @@ export class MatSelectionList extends _MatSelectionListMixinBase implements Focu
 
   constructor(private _element: ElementRef, @Attribute('tabindex') tabIndex: string) {
     super();
-
     this.tabIndex = parseInt(tabIndex) || 0;
   }
 
@@ -346,14 +346,12 @@ export class MatSelectionList extends _MatSelectionListMixinBase implements Focu
 
   /** Selects all of the options. */
   selectAll() {
-    this.options.forEach(option => option._setSelected(true));
-    this._reportValueChange();
+    this._setAllOptionsSelected(true);
   }
 
   /** Deselects all of the options. */
   deselectAll() {
-    this.options.forEach(option => option._setSelected(false));
-    this._reportValueChange();
+    this._setAllOptionsSelected(false);
   }
 
   /** Sets the focused option of the selection-list. */
@@ -395,6 +393,12 @@ export class MatSelectionList extends _MatSelectionListMixinBase implements Focu
       case END:
         keyCode === HOME ? manager.setFirstItemActive() : manager.setLastItemActive();
         event.preventDefault();
+        break;
+      case A:
+        if (event.ctrlKey) {
+          this.options.find(option => !option.selected) ? this.selectAll() : this.deselectAll();
+          event.preventDefault();
+        }
         break;
       default:
         manager.onKeydown(event);
@@ -476,6 +480,26 @@ export class MatSelectionList extends _MatSelectionListMixinBase implements Focu
         // interaction.
         this._emitChangeEvent(focusedOption);
       }
+    }
+  }
+
+  /**
+   * Sets the selected state on all of the options
+   * and emits an event if anything changed.
+   */
+  private _setAllOptionsSelected(isSelected: boolean) {
+    // Keep track of whether anything changed, because we only want to
+    // emit the changed event when something actually changed.
+    let hasChanged = false;
+
+    this.options.forEach(option => {
+      if (option._setSelected(isSelected)) {
+        hasChanged = true;
+      }
+    });
+
+    if (hasChanged) {
+      this._reportValueChange();
     }
   }
 

@@ -1,4 +1,4 @@
-import {DOWN_ARROW, SPACE, ENTER, UP_ARROW, HOME, END} from '@angular/cdk/keycodes';
+import {DOWN_ARROW, SPACE, ENTER, UP_ARROW, HOME, END, A} from '@angular/cdk/keycodes';
 import {
   createKeyboardEvent,
   dispatchFakeEvent,
@@ -319,6 +319,48 @@ describe('MatSelectionList without forms', () => {
 
       expect(manager.activeItemIndex).toBe(3);
       expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('should select all items using ctrl + a', () => {
+      const event = createKeyboardEvent('keydown', A, selectionList.nativeElement);
+      Object.defineProperty(event, 'ctrlKey', {get: () => true});
+
+      expect(listOptions.some(option => option.componentInstance.selected)).toBe(false);
+
+      dispatchEvent(selectionList.nativeElement, event);
+      fixture.detectChanges();
+
+      expect(listOptions.every(option => option.componentInstance.selected)).toBe(true);
+    });
+
+    it('should select all items using ctrl + a if some items are selected', () => {
+      const event = createKeyboardEvent('keydown', A, selectionList.nativeElement);
+      Object.defineProperty(event, 'ctrlKey', {get: () => true});
+
+      listOptions.slice(0, 2).forEach(option => option.componentInstance.selected = true);
+      fixture.detectChanges();
+
+      expect(listOptions.some(option => option.componentInstance.selected)).toBe(true);
+
+      dispatchEvent(selectionList.nativeElement, event);
+      fixture.detectChanges();
+
+      expect(listOptions.every(option => option.componentInstance.selected)).toBe(true);
+    });
+
+    it('should deselect all with ctrl + a if all options are selected', () => {
+      const event = createKeyboardEvent('keydown', A, selectionList.nativeElement);
+      Object.defineProperty(event, 'ctrlKey', {get: () => true});
+
+      listOptions.forEach(option => option.componentInstance.selected = true);
+      fixture.detectChanges();
+
+      expect(listOptions.every(option => option.componentInstance.selected)).toBe(true);
+
+      dispatchEvent(selectionList.nativeElement, event);
+      fixture.detectChanges();
+
+      expect(listOptions.every(option => option.componentInstance.selected)).toBe(false);
     });
 
     it('should be able to jump focus down to an item by typing', fakeAsync(() => {
@@ -751,6 +793,30 @@ describe('MatSelectionList with forms', () => {
       expect(fixture.componentInstance.selectedOptions).toEqual(['opt1']);
     }));
 
+    it('should not dispatch the model change event if nothing changed using selectAll', () => {
+      expect(fixture.componentInstance.modelChangeSpy).not.toHaveBeenCalled();
+
+      selectionListDebug.componentInstance.selectAll();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.modelChangeSpy).toHaveBeenCalledTimes(1);
+
+      selectionListDebug.componentInstance.selectAll();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.modelChangeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not dispatch the model change event if nothing changed using selectAll', () => {
+      expect(fixture.componentInstance.modelChangeSpy).not.toHaveBeenCalled();
+
+      selectionListDebug.componentInstance.deselectAll();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.modelChangeSpy).not.toHaveBeenCalled();
+    });
+
+
   });
 
   describe('and formControl', () => {
@@ -968,13 +1034,14 @@ class SelectionListWithTabindexBinding {
 
 @Component({
   template: `
-    <mat-selection-list [(ngModel)]="selectedOptions">
+    <mat-selection-list [(ngModel)]="selectedOptions" (ngModelChange)="modelChangeSpy()">
       <mat-list-option value="opt1">Option 1</mat-list-option>
       <mat-list-option value="opt2">Option 2</mat-list-option>
       <mat-list-option value="opt3" *ngIf="renderLastOption">Option 3</mat-list-option>
     </mat-selection-list>`
 })
 class SelectionListWithModel {
+  modelChangeSpy = jasmine.createSpy('model change spy');
   selectedOptions: string[] = [];
   renderLastOption = true;
 }
