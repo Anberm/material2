@@ -1,22 +1,43 @@
-import {chain, noop, Rule, Tree, SchematicContext} from '@angular-devkit/schematics';
+/**
+ * @license
+ * Copyright Google LLC All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
+import {
+  chain,
+  noop,
+  Rule,
+  SchematicContext,
+  SchematicsException,
+  Tree,
+} from '@angular-devkit/schematics';
 import {NodePackageInstallTask} from '@angular-devkit/schematics/tasks';
+import {InsertChange} from '@schematics/angular/utility/change';
+import {getWorkspace} from '@schematics/angular/utility/config';
+import {materialVersion, requiredAngularVersion} from './version-names';
 import {addModuleImportToRootModule, getStylesPath} from '../utils/ast';
-import {InsertChange} from '../utils/devkit-utils/change';
-import {getProjectFromWorkspace, getWorkspace} from '../utils/devkit-utils/config';
+import {getProjectFromWorkspace} from '../utils/get-project';
 import {addHeadLink} from '../utils/html';
-import {angularVersion, materialVersion} from '../utils/lib-versions';
-import {addPackageToPackageJson} from '../utils/package';
+import {addPackageToPackageJson, getPackageVersionFromPackageJson} from '../utils/package';
 import {Schema} from './schema';
 import {addThemeToAppStyles} from './theming';
-
+import * as parse5 from 'parse5';
 
 /**
  * Scaffolds the basics of a Angular Material application, this includes:
  *  - Add Packages to package.json
  *  - Adds pre-built themes to styles.ext
- *  - Adds Browser Animation to app.momdule
+ *  - Adds Browser Animation to app.module
  */
 export default function(options: Schema): Rule {
+  if (!parse5) {
+    throw new SchematicsException('Parse5 is required but could not be found! Please install ' +
+      '"parse5" manually in order to continue.');
+  }
+
   return chain([
     options && options.skipPackageJson ? noop() : addMaterialToPackageJson(),
     addThemeToAppStyles(options),
@@ -26,13 +47,21 @@ export default function(options: Schema): Rule {
   ]);
 }
 
-/** Add material, cdk, annimations to package.json if not already present. */
+/** Add material, cdk, animations to package.json if not already present. */
 function addMaterialToPackageJson() {
   return (host: Tree, context: SchematicContext) => {
+    // Version tag of the `@angular/core` dependency that has been loaded from the `package.json`
+    // of the CLI project. This tag should be preferred because all Angular dependencies should
+    // have the same version tag if possible.
+    const ngCoreVersionTag = getPackageVersionFromPackageJson(host, '@angular/core');
+
     addPackageToPackageJson(host, 'dependencies', '@angular/cdk', materialVersion);
     addPackageToPackageJson(host, 'dependencies', '@angular/material', materialVersion);
-    addPackageToPackageJson(host, 'dependencies', '@angular/animations', angularVersion);
+    addPackageToPackageJson(host, 'dependencies', '@angular/animations',
+        ngCoreVersionTag || requiredAngularVersion);
+
     context.addTask(new NodePackageInstallTask());
+
     return host;
   };
 }
@@ -75,7 +104,7 @@ function addBodyMarginToStyles(options: Schema) {
     const workspace = getWorkspace(host);
     const project = getProjectFromWorkspace(workspace, options.project);
 
-    const stylesPath = getStylesPath(host, project);
+    const stylesPath = getStylesPath(project);
 
     const buffer = host.read(stylesPath);
     if (buffer) {
