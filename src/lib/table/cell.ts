@@ -51,7 +51,10 @@ export class MatFooterCellDef extends CdkFooterCellDef {}
  */
 @Directive({
   selector: '[matColumnDef]',
-  providers: [{provide: CdkColumnDef, useExisting: MatColumnDef}],
+  providers: [
+    {provide: CdkColumnDef, useExisting: MatColumnDef},
+    {provide: 'MAT_SORT_HEADER_COLUMN_DEF', useExisting: MatColumnDef}
+  ],
 })
 export class MatColumnDef extends CdkColumnDef {
   /** Unique name for this column. */
@@ -74,7 +77,7 @@ export class MatColumnDef extends CdkColumnDef {
 })
 export class MatHeaderCell extends CdkHeaderCell {
   constructor(columnDef: CdkColumnDef,
-              elementRef: ElementRef) {
+              elementRef: ElementRef<HTMLElement>) {
     super(columnDef, elementRef);
     elementRef.nativeElement.classList.add(`mat-column-${columnDef.cssClassFriendlyName}`);
   }
@@ -106,7 +109,7 @@ export class MatFooterCell extends CdkFooterCell {
 })
 export class MatCell extends CdkCell {
   constructor(columnDef: CdkColumnDef,
-              elementRef: ElementRef) {
+              elementRef: ElementRef<HTMLElement>) {
     super(columnDef, elementRef);
     elementRef.nativeElement.classList.add(`mat-column-${columnDef.cssClassFriendlyName}`);
   }

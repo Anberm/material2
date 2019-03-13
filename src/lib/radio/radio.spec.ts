@@ -3,7 +3,6 @@ import {FormControl, FormsModule, NgModel, ReactiveFormsModule} from '@angular/f
 import {Component, DebugElement, ViewChild} from '@angular/core';
 import {By} from '@angular/platform-browser';
 import {dispatchFakeEvent} from '@angular/cdk/testing';
-import {defaultRippleAnimationConfig} from '@angular/material/core';
 import {MatRadioButton, MatRadioChange, MatRadioGroup, MatRadioModule} from './index';
 
 describe('MatRadio', () => {
@@ -19,7 +18,8 @@ describe('MatRadio', () => {
         RadioGroupWithFormControl,
         StandaloneRadioButtons,
         InterleavedRadioGroup,
-        TranscludingWrapper
+        TranscludingWrapper,
+        RadioButtonWithPredefinedTabindex,
       ]
     });
 
@@ -197,25 +197,6 @@ describe('MatRadio', () => {
       expect(changeSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('should show a ripple when focusing via the keyboard', fakeAsync(() => {
-      expect(radioNativeElements[0].querySelectorAll('.mat-ripple-element').length)
-          .toBe(0, 'Expected no ripples on init.');
-
-      dispatchFakeEvent(radioInputElements[0], 'keydown');
-      dispatchFakeEvent(radioInputElements[0], 'focus');
-
-      tick(defaultRippleAnimationConfig.enterDuration);
-
-      expect(radioNativeElements[0].querySelectorAll('.mat-ripple-element').length)
-          .toBe(1, 'Expected one ripple after keyboard focus.');
-
-      dispatchFakeEvent(radioInputElements[0], 'blur');
-      tick(defaultRippleAnimationConfig.exitDuration);
-
-      expect(radioNativeElements[0].querySelectorAll('.mat-ripple-element').length)
-          .toBe(0, 'Expected no ripples on blur.');
-    }));
-
     it('should update the group and radios when updating the group value', () => {
       expect(groupInstance.value).toBeFalsy();
 
@@ -236,7 +217,7 @@ describe('MatRadio', () => {
       expect(radioInstances[1].checked).toBe(true);
     });
 
-    it('should deselect all of the checkboxes when the group value is cleared', () => {
+    it('should deselect all of the radios when the group value is cleared', () => {
       radioInstances[0].checked = true;
 
       expect(groupInstance.value).toBeTruthy();
@@ -253,8 +234,10 @@ describe('MatRadio', () => {
       dispatchFakeEvent(radioLabelElements[0], 'mousedown');
       dispatchFakeEvent(radioLabelElements[0], 'mouseup');
 
-      expect(radioNativeElements[0].querySelectorAll('.mat-ripple-element').length)
-        .toBe(0, 'Expected a disabled radio button to not show ripples');
+      let rippleAmount = radioNativeElements[0]
+          .querySelectorAll('.mat-ripple-element:not(.mat-radio-persistent-ripple)').length;
+
+      expect(rippleAmount).toBe(0, 'Expected a disabled radio button to not show ripples');
 
       testComponent.isFirstDisabled = false;
       fixture.detectChanges();
@@ -262,7 +245,10 @@ describe('MatRadio', () => {
       dispatchFakeEvent(radioLabelElements[0], 'mousedown');
       dispatchFakeEvent(radioLabelElements[0], 'mouseup');
 
-      expect(radioNativeElements[0].querySelectorAll('.mat-ripple-element').length)
+      rippleAmount = radioNativeElements[0]
+          .querySelectorAll('.mat-ripple-element:not(.mat-radio-persistent-ripple)').length;
+
+      expect(rippleAmount)
         .toBe(1, 'Expected an enabled radio button to show ripples');
     });
 
@@ -274,7 +260,10 @@ describe('MatRadio', () => {
         dispatchFakeEvent(radioLabel, 'mousedown');
         dispatchFakeEvent(radioLabel, 'mouseup');
 
-        expect(radioLabel.querySelectorAll('.mat-ripple-element').length).toBe(0);
+        const rippleAmount = radioNativeElements[0]
+            .querySelectorAll('.mat-ripple-element:not(.mat-radio-persistent-ripple)').length;
+
+        expect(rippleAmount).toBe(0);
       }
 
       testComponent.disableRipple = false;
@@ -284,7 +273,10 @@ describe('MatRadio', () => {
         dispatchFakeEvent(radioLabel, 'mousedown');
         dispatchFakeEvent(radioLabel, 'mouseup');
 
-        expect(radioLabel.querySelectorAll('.mat-ripple-element').length).toBe(1);
+        const rippleAmount = radioNativeElements[0]
+            .querySelectorAll('.mat-ripple-element:not(.mat-radio-persistent-ripple)').length;
+
+        expect(rippleAmount).toBe(1);
       }
     });
 
@@ -417,6 +409,20 @@ describe('MatRadio', () => {
       }
     });
 
+    it('should update the name of radio DOM elements if the name of the group changes', () => {
+      const nodes: HTMLInputElement[] = innerRadios.map(radio => radio.nativeElement);
+
+      expect(nodes.every(radio => radio.getAttribute('name') === groupInstance.name))
+          .toBe(true, 'Expected all radios to have the initial name.');
+
+      fixture.componentInstance.groupName = 'changed-name';
+      fixture.detectChanges();
+
+      expect(groupInstance.name).toBe('changed-name');
+      expect(nodes.every(radio => radio.getAttribute('name') === groupInstance.name))
+          .toBe(true, 'Expected all radios to have the new name.');
+    });
+
     it('should check the corresponding radio button on group value change', () => {
       expect(groupInstance.value).toBeFalsy();
       for (const radio of radioInstances) {
@@ -449,6 +455,14 @@ describe('MatRadio', () => {
       // now also be touched.
       radioLabelElements[2].click();
       fixture.detectChanges();
+
+      expect(groupNgModel.valid).toBe(true);
+      expect(groupNgModel.pristine).toBe(false);
+      expect(groupNgModel.touched).toBe(false);
+
+      // Blur the input element in order to verify that the ng-touched state has been set to true.
+      // The touched state should be only set to true after the form control has been blurred.
+      dispatchFakeEvent(innerRadios[2].nativeElement, 'blur');
 
       expect(groupNgModel.valid).toBe(true);
       expect(groupNgModel.pristine).toBe(false);
@@ -723,6 +737,17 @@ describe('MatRadio', () => {
       expect(radioButtonInput.tabIndex)
         .toBe(4, 'Expected the tabindex to be set to "4".');
     });
+
+    it('should remove the tabindex from the host element', () => {
+      const predefinedFixture = TestBed.createComponent(RadioButtonWithPredefinedTabindex);
+      predefinedFixture.detectChanges();
+
+      const radioButtonEl =
+          predefinedFixture.debugElement.query(By.css('.mat-radio-button')).nativeElement;
+
+      expect(radioButtonEl.getAttribute('tabindex')).toBe('-1');
+    });
+
   });
 
   describe('group interspersed with other tags', () => {
@@ -811,7 +836,7 @@ class StandaloneRadioButtons {
 
 @Component({
   template: `
-  <mat-radio-group [(ngModel)]="modelValue" (change)="lastEvent = $event">
+  <mat-radio-group [name]="groupName" [(ngModel)]="modelValue" (change)="lastEvent = $event">
     <mat-radio-button *ngFor="let option of options" [value]="option.value">
       {{option.label}}
     </mat-radio-button>
@@ -820,6 +845,7 @@ class StandaloneRadioButtons {
 })
 class RadioGroupWithNgModel {
   modelValue: string;
+  groupName = 'radio-group';
   options = [
     {label: 'Vanilla', value: 'vanilla'},
     {label: 'Chocolate', value: 'chocolate'},
@@ -832,7 +858,7 @@ class RadioGroupWithNgModel {
   template: `<mat-radio-button>One</mat-radio-button>`
 })
 class DisableableRadioButton {
-  @ViewChild(MatRadioButton) matRadioButton;
+  @ViewChild(MatRadioButton) matRadioButton: MatRadioButton;
 
   set disabled(value: boolean) {
     this.matRadioButton.disabled = value;
@@ -882,3 +908,9 @@ class InterleavedRadioGroup {
   `
 })
 class TranscludingWrapper {}
+
+
+@Component({
+  template: `<mat-radio-button tabindex="0"></mat-radio-button>`
+})
+class RadioButtonWithPredefinedTabindex {}

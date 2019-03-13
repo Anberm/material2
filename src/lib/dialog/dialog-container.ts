@@ -55,7 +55,7 @@ export function throwMatDialogContentAlreadyAttachedError() {
   // Using OnPush for dialogs caused some G3 sync issues. Disabled until we can track them down.
   // tslint:disable-next-line:validate-decorators
   changeDetection: ChangeDetectionStrategy.Default,
-  animations: [matDialogAnimations.slideDialog],
+  animations: [matDialogAnimations.dialogContainer],
   host: {
     'class': 'mat-dialog-container',
     'tabindex': '-1',
@@ -65,14 +65,14 @@ export function throwMatDialogContentAlreadyAttachedError() {
     '[attr.aria-labelledby]': '_config.ariaLabel ? null : _ariaLabelledBy',
     '[attr.aria-label]': '_config.ariaLabel',
     '[attr.aria-describedby]': '_config.ariaDescribedBy || null',
-    '[@slideDialog]': '_state',
-    '(@slideDialog.start)': '_onAnimationStart($event)',
-    '(@slideDialog.done)': '_onAnimationDone($event)',
+    '[@dialogContainer]': '_state',
+    '(@dialogContainer.start)': '_onAnimationStart($event)',
+    '(@dialogContainer.done)': '_onAnimationDone($event)',
   },
 })
 export class MatDialogContainer extends BasePortalOutlet {
   /** The portal outlet inside of this container into which the dialog content will be loaded. */
-  @ViewChild(CdkPortalOutlet) _portalOutlet: CdkPortalOutlet;
+  @ViewChild(CdkPortalOutlet, {static: true}) _portalOutlet: CdkPortalOutlet;
 
   /** The class that traps and manages focus within the dialog. */
   private _focusTrap: FocusTrap;
@@ -87,7 +87,7 @@ export class MatDialogContainer extends BasePortalOutlet {
   _animationStateChanged = new EventEmitter<AnimationEvent>();
 
   /** ID of the element that should be considered as the dialog's label. */
-  _ariaLabelledBy: string | null = null;
+  _ariaLabelledBy: string | null;
 
   /** ID for the container DOM element. */
   _id: string;
@@ -101,6 +101,7 @@ export class MatDialogContainer extends BasePortalOutlet {
     public _config: MatDialogConfig) {
 
     super();
+    this._ariaLabelledBy = _config.ariaLabelledBy || null;
   }
 
   /**

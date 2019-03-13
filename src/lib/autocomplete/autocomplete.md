@@ -19,7 +19,7 @@ If you are unfamiliar with using reactive forms, you can read more about the sub
 ```
 
 Next, create the autocomplete panel and the options displayed inside it. Each option should be
-defined by an `mat-option` tag. Set each option's value property to whatever you'd like the value
+defined by a `mat-option` tag. Set each option's value property to whatever you'd like the value
 of the text input to be upon that option's selection.
 
 *my-comp.html*
@@ -112,9 +112,10 @@ autocomplete is attached to using the `matAutocompleteOrigin` directive together
 ```
 
 ### Keyboard interaction
-- <kbd>DOWN_ARROW</kbd>: Next option becomes active.
-- <kbd>UP_ARROW</kbd>: Previous option becomes active.
-- <kbd>ENTER</kbd>: Select currently active item.
+- <kbd>DOWN_ARROW</kbd>: Next option becomes active
+- <kbd>UP_ARROW</kbd>: Previous option becomes active
+- <kbd>ENTER</kbd>: Selects currently active item
+- <kbd>ESCAPE</kbd>: Closes the autocomplete panel
 
 ### Option groups
 `mat-option` can be collected into groups using the `mat-optgroup` element:

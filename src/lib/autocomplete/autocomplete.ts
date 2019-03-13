@@ -5,32 +5,34 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
+
+import {ActiveDescendantKeyManager} from '@angular/cdk/a11y';
+import {coerceBooleanProperty} from '@angular/cdk/coercion';
 import {
   AfterContentInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   ContentChildren,
   ElementRef,
+  EventEmitter,
+  Inject,
+  InjectionToken,
   Input,
+  Output,
   QueryList,
   TemplateRef,
   ViewChild,
   ViewEncapsulation,
-  ChangeDetectorRef,
-  ChangeDetectionStrategy,
-  EventEmitter,
-  Output,
-  InjectionToken,
-  Inject,
 } from '@angular/core';
 import {
-  MatOption,
-  MatOptgroup,
-  MAT_OPTION_PARENT_COMPONENT,
-  mixinDisableRipple,
   CanDisableRipple,
+  CanDisableRippleCtor,
+  MAT_OPTION_PARENT_COMPONENT,
+  MatOptgroup,
+  MatOption,
+  mixinDisableRipple,
 } from '@angular/material/core';
-import {ActiveDescendantKeyManager} from '@angular/cdk/a11y';
-import {coerceBooleanProperty} from '@angular/cdk/coercion';
 
 
 /**
@@ -48,10 +50,12 @@ export class MatAutocompleteSelectedEvent {
     public option: MatOption) { }
 }
 
+
 // Boilerplate for applying mixins to MatAutocomplete.
 /** @docs-private */
 export class MatAutocompleteBase {}
-export const _MatAutocompleteMixinBase = mixinDisableRipple(MatAutocompleteBase);
+export const _MatAutocompleteMixinBase: CanDisableRippleCtor & typeof MatAutocompleteBase =
+    mixinDisableRipple(MatAutocompleteBase);
 
 /** Default `mat-autocomplete` options that can be overridden. */
 export interface MatAutocompleteDefaultOptions {
@@ -149,9 +153,16 @@ export class MatAutocomplete extends _MatAutocompleteMixinBase implements AfterC
   @Input('class')
   set classList(value: string) {
     if (value && value.length) {
-      value.split(' ').forEach(className => this._classList[className.trim()] = true);
-      this._elementRef.nativeElement.className = '';
+      this._classList = value.split(' ').reduce((classList, className) => {
+        classList[className.trim()] = true;
+        return classList;
+      }, {} as {[key: string]: boolean});
+    } else {
+      this._classList = {};
     }
+
+    this._setVisibilityClasses(this._classList);
+    this._elementRef.nativeElement.className = '';
   }
   _classList: {[key: string]: boolean} = {};
 
@@ -160,7 +171,7 @@ export class MatAutocomplete extends _MatAutocompleteMixinBase implements AfterC
 
   constructor(
     private _changeDetectorRef: ChangeDetectorRef,
-    private _elementRef: ElementRef,
+    private _elementRef: ElementRef<HTMLElement>,
     @Inject(MAT_AUTOCOMPLETE_DEFAULT_OPTIONS) defaults: MatAutocompleteDefaultOptions) {
     super();
 
@@ -191,8 +202,7 @@ export class MatAutocomplete extends _MatAutocompleteMixinBase implements AfterC
   /** Panel should hide itself when the option list is empty. */
   _setVisibility() {
     this.showPanel = !!this.options.length;
-    this._classList['mat-autocomplete-visible'] = this.showPanel;
-    this._classList['mat-autocomplete-hidden'] = !this.showPanel;
+    this._setVisibilityClasses(this._classList);
     this._changeDetectorRef.markForCheck();
   }
 
@@ -200,6 +210,12 @@ export class MatAutocomplete extends _MatAutocompleteMixinBase implements AfterC
   _emitSelectEvent(option: MatOption): void {
     const event = new MatAutocompleteSelectedEvent(this, option);
     this.optionSelected.emit(event);
+  }
+
+  /** Sets the autocomplete visibility classes on a classlist based on the panel is visible. */
+  private _setVisibilityClasses(classList: {[key: string]: boolean}) {
+    classList['mat-autocomplete-visible'] = this.showPanel;
+    classList['mat-autocomplete-hidden'] = !this.showPanel;
   }
 }
 

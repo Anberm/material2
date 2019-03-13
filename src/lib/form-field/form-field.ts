@@ -26,16 +26,17 @@ import {
   QueryList,
   ViewChild,
   ViewEncapsulation,
+  OnDestroy,
 } from '@angular/core';
 import {
-  CanColor,
+  CanColor, CanColorCtor,
   FloatLabelType,
   LabelOptions,
   MAT_LABEL_GLOBAL_OPTIONS,
   mixinColor,
 } from '@angular/material/core';
-import {EMPTY, fromEvent, merge} from 'rxjs';
-import {startWith, take} from 'rxjs/operators';
+import {fromEvent, merge, Subject} from 'rxjs';
+import {startWith, take, takeUntil} from 'rxjs/operators';
 import {MatError} from './error';
 import {matFormFieldAnimations} from './form-field-animations';
 import {MatFormFieldControl} from './form-field-control';
@@ -50,6 +51,7 @@ import {MatPlaceholder} from './placeholder';
 import {MatPrefix} from './prefix';
 import {MatSuffix} from './suffix';
 import {Platform} from '@angular/cdk/platform';
+import {NgControl} from '@angular/forms';
 import {ANIMATION_MODULE_TYPE} from '@angular/platform-browser/animations';
 
 
@@ -70,13 +72,14 @@ export class MatFormFieldBase {
  * Base class to which we're applying the form field mixins.
  * @docs-private
  */
-export const _MatFormFieldMixinBase = mixinColor(MatFormFieldBase, 'primary');
+export const _MatFormFieldMixinBase: CanColorCtor & typeof MatFormFieldBase =
+    mixinColor(MatFormFieldBase, 'primary');
 
 /** Possible appearance styles for the form field. */
 export type MatFormFieldAppearance = 'legacy' | 'standard' | 'fill' | 'outline';
 
 /**
- * Represents the default options form the form field that can be configured
+ * Represents the default options for the form field that can be configured
  * using the `MAT_FORM_FIELD_DEFAULT_OPTIONS` injection token.
  */
 export interface MatFormFieldDefaultOptions {
@@ -97,16 +100,16 @@ export const MAT_FORM_FIELD_DEFAULT_OPTIONS =
   selector: 'mat-form-field',
   exportAs: 'matFormField',
   templateUrl: 'form-field.html',
-  // MatInput is a directive and can't have styles, so we need to include its styles here.
-  // The MatInput styles are fairly minimal so it shouldn't be a big deal for people who
-  // aren't using MatInput.
+  // MatInput is a directive and can't have styles, so we need to include its styles here
+  // in form-field-input.css. The MatInput styles are fairly minimal so it shouldn't be a
+  // big deal for people who aren't using MatInput.
   styleUrls: [
     'form-field.css',
     'form-field-fill.css',
+    'form-field-input.css',
     'form-field-legacy.css',
     'form-field-outline.css',
     'form-field-standard.css',
-    '../input/input.css',
   ],
   animations: [matFormFieldAnimations.transitionMessages],
   host: {
@@ -118,6 +121,7 @@ export const MAT_FORM_FIELD_DEFAULT_OPTIONS =
     '[class.mat-form-field-invalid]': '_control.errorState',
     '[class.mat-form-field-can-float]': '_canLabelFloat',
     '[class.mat-form-field-should-float]': '_shouldLabelFloat()',
+    '[class.mat-form-field-has-label]': '_hasFloatingLabel()',
     '[class.mat-form-field-hide-placeholder]': '_hideControlPlaceholder()',
     '[class.mat-form-field-disabled]': '_control.disabled',
     '[class.mat-form-field-autofilled]': '_control.autofilled',
@@ -139,21 +143,31 @@ export const MAT_FORM_FIELD_DEFAULT_OPTIONS =
 })
 
 export class MatFormField extends _MatFormFieldMixinBase
-    implements AfterContentInit, AfterContentChecked, AfterViewInit, CanColor {
+    implements AfterContentInit, AfterContentChecked, AfterViewInit, OnDestroy, CanColor {
   private _labelOptions: LabelOptions;
+
+  /**
+   * Whether the outline gap needs to be calculated
+   * immediately on the next change detection run.
+   */
+  private _outlineGapCalculationNeededImmediately = false;
+
+  /** Whether the outline gap needs to be calculated next time the zone has stabilized. */
+  private _outlineGapCalculationNeededOnStable = false;
+
+  private _destroyed = new Subject<void>();
 
   /** The form-field appearance style. */
   @Input()
-  get appearance(): MatFormFieldAppearance {
-    return this._appearance || this._defaultOptions && this._defaultOptions.appearance || 'legacy';
-  }
+  get appearance(): MatFormFieldAppearance { return this._appearance; }
   set appearance(value: MatFormFieldAppearance) {
-    // If we're switching to `outline` from another appearance, we have to recalculate the gap.
-    if (value !== this._appearance && value === 'outline') {
-      this._initialGapCalculated = false;
-    }
+    const oldValue = this._appearance;
 
-    this._appearance = value;
+    this._appearance = value || (this._defaults && this._defaults.appearance) || 'legacy';
+
+    if (this._appearance === 'outline' && oldValue !== value) {
+      this._updateOutlineGapOnStable();
+    }
   }
   _appearance: MatFormFieldAppearance;
 
@@ -217,13 +231,9 @@ export class MatFormField extends _MatFormFieldMixinBase
   /** Whether the Angular animations are enabled. */
   _animationsEnabled: boolean;
 
-  _outlineGapWidth = 0;
-  _outlineGapStart = 0;
-  _initialGapCalculated = false;
-
   /**
    * @deprecated
-   * @breaking-change 7.0.0
+   * @breaking-change 8.0.0
    */
   @ViewChild('underline') underlineRef: ElementRef;
 
@@ -243,9 +253,9 @@ export class MatFormField extends _MatFormFieldMixinBase
       private _changeDetectorRef: ChangeDetectorRef,
       @Optional() @Inject(MAT_LABEL_GLOBAL_OPTIONS) labelOptions: LabelOptions,
       @Optional() private _dir: Directionality,
-      @Optional() @Inject(MAT_FORM_FIELD_DEFAULT_OPTIONS) private _defaultOptions:
-          MatFormFieldDefaultOptions,
-      // @breaking-change 7.0.0 _platform, _ngZone and _animationMode to be made required.
+      @Optional() @Inject(MAT_FORM_FIELD_DEFAULT_OPTIONS)
+          private _defaults: MatFormFieldDefaultOptions,
+      // @breaking-change 8.0.0 _platform, _ngZone and _animationMode to be made required.
       private _platform?: Platform,
       private _ngZone?: NgZone,
       @Optional() @Inject(ANIMATION_MODULE_TYPE) _animationMode?: string) {
@@ -254,6 +264,9 @@ export class MatFormField extends _MatFormFieldMixinBase
     this._labelOptions = labelOptions ? labelOptions : {};
     this.floatLabel = this._labelOptions.float || 'auto';
     this._animationsEnabled = _animationMode !== 'NoopAnimations';
+
+    // Set the default through here so we invoke the setter on the first run.
+    this.appearance = (_defaults && _defaults.appearance) ? _defaults.appearance : 'legacy';
   }
 
   /**
@@ -266,22 +279,49 @@ export class MatFormField extends _MatFormFieldMixinBase
 
   ngAfterContentInit() {
     this._validateControlChild();
-    if (this._control.controlType) {
-      this._elementRef.nativeElement.classList
-          .add(`mat-form-field-type-${this._control.controlType}`);
+
+    const control = this._control;
+
+    if (control.controlType) {
+      this._elementRef.nativeElement.classList.add(`mat-form-field-type-${control.controlType}`);
     }
 
     // Subscribe to changes in the child control state in order to update the form field UI.
-    this._control.stateChanges.pipe(startWith(null!)).subscribe(() => {
+    control.stateChanges.pipe(startWith<void>(null!)).subscribe(() => {
       this._validatePlaceholders();
       this._syncDescribedByIds();
       this._changeDetectorRef.markForCheck();
     });
 
-    // Run change detection if the value, prefix, or suffix changes.
-    const valueChanges = this._control.ngControl && this._control.ngControl.valueChanges || EMPTY;
-    merge(valueChanges, this._prefixChildren.changes, this._suffixChildren.changes)
+    // Run change detection if the value changes.
+    if (control.ngControl && control.ngControl.valueChanges) {
+      control.ngControl.valueChanges
+        .pipe(takeUntil(this._destroyed))
         .subscribe(() => this._changeDetectorRef.markForCheck());
+    }
+
+    // @breaking-change 7.0.0 Remove this check once _ngZone is required. Also reconsider
+    // whether the `ngAfterContentChecked` below is still necessary.
+    const zone = this._ngZone;
+
+    if (zone) {
+      // Note that we have to run outside of the `NgZone` explicitly,
+      // in order to avoid throwing users into an infinite loop
+      // if `zone-patch-rxjs` is included.
+      zone.runOutsideAngular(() => {
+        zone.onStable.asObservable().pipe(takeUntil(this._destroyed)).subscribe(() => {
+          if (this._outlineGapCalculationNeededOnStable) {
+            this.updateOutlineGap();
+          }
+        });
+      });
+    }
+
+    // Run change detection and update the outline if the suffix or prefix changes.
+    merge(this._prefixChildren.changes, this._suffixChildren.changes).subscribe(() => {
+      this._updateOutlineGapOnStable();
+      this._changeDetectorRef.markForCheck();
+    });
 
     // Re-validate when the number of hints changes.
     this._hintChildren.changes.pipe(startWith(null)).subscribe(() => {
@@ -294,23 +334,16 @@ export class MatFormField extends _MatFormFieldMixinBase
       this._syncDescribedByIds();
       this._changeDetectorRef.markForCheck();
     });
+
+    if (this._dir) {
+      this._dir.change.pipe(takeUntil(this._destroyed)).subscribe(() => this.updateOutlineGap());
+    }
   }
 
   ngAfterContentChecked() {
     this._validateControlChild();
-
-    if (!this._initialGapCalculated) {
-      // @breaking-change 7.0.0 Remove this check and else block once _ngZone is required.
-      if (this._ngZone) {
-        // It's important that we run this outside the `_ngZone`, because the `Promise.resolve`
-        // can kick us into an infinite change detection loop, if the `_initialGapCalculated`
-        // wasn't flipped on for some reason.
-        this._ngZone.runOutsideAngular(() => {
-          Promise.resolve().then(() => this.updateOutlineGap());
-        });
-      } else {
-        Promise.resolve().then(() => this.updateOutlineGap());
-      }
+    if (this._outlineGapCalculationNeededImmediately) {
+      this.updateOutlineGap();
     }
   }
 
@@ -320,8 +353,13 @@ export class MatFormField extends _MatFormFieldMixinBase
     this._changeDetectorRef.detectChanges();
   }
 
+  ngOnDestroy() {
+    this._destroyed.next();
+    this._destroyed.complete();
+  }
+
   /** Determines whether a class from the NgControl should be forwarded to the host element. */
-  _shouldForward(prop: string): boolean {
+  _shouldForward(prop: keyof NgControl): boolean {
     const ngControl = this._control ? this._control.ngControl : null;
     return ngControl && ngControl[prop];
   }
@@ -422,9 +460,9 @@ export class MatFormField extends _MatFormFieldMixinBase
       let ids: string[] = [];
 
       if (this._getDisplayedMessages() === 'hint') {
-        let startHint = this._hintChildren ?
+        const startHint = this._hintChildren ?
             this._hintChildren.find(hint => hint.align === 'start') : null;
-        let endHint = this._hintChildren ?
+        const endHint = this._hintChildren ?
             this._hintChildren.find(hint => hint.align === 'end') : null;
 
         if (startHint) {
@@ -456,36 +494,83 @@ export class MatFormField extends _MatFormFieldMixinBase
    * appearance.
    */
   updateOutlineGap() {
-    if (this.appearance === 'outline' && this._label && this._label.nativeElement.children.length) {
-      if (this._platform && !this._platform.isBrowser) {
-        // getBoundingClientRect isn't available on the server.
-        this._initialGapCalculated = true;
-        return;
-      }
-      if (!document.documentElement.contains(this._elementRef.nativeElement)) {
+    const labelEl = this._label ? this._label.nativeElement : null;
+
+    if (this.appearance !== 'outline' || !labelEl || !labelEl.children.length ||
+        !labelEl.textContent.trim()) {
+      return;
+    }
+
+    if (this._platform && !this._platform.isBrowser) {
+      // getBoundingClientRect isn't available on the server.
+      return;
+    }
+    // If the element is not present in the DOM, the outline gap will need to be calculated
+    // the next time it is checked and in the DOM.
+    if (!document.documentElement!.contains(this._elementRef.nativeElement)) {
+      this._outlineGapCalculationNeededImmediately = true;
+      return;
+    }
+
+    let startWidth = 0;
+    let gapWidth = 0;
+
+    const container = this._connectionContainerRef.nativeElement;
+    const startEls = container.querySelectorAll('.mat-form-field-outline-start');
+    const gapEls = container.querySelectorAll('.mat-form-field-outline-gap');
+
+    if (this._label && this._label.nativeElement.children.length) {
+      const containerRect = container.getBoundingClientRect();
+
+      // If the container's width and height are zero, it means that the element is
+      // invisible and we can't calculate the outline gap. Mark the element as needing
+      // to be checked the next time the zone stabilizes. We can't do this immediately
+      // on the next change detection, because even if the element becomes visible,
+      // the `ClientRect` won't be reclaculated immediately. We reset the
+      // `_outlineGapCalculationNeededImmediately` flag some we don't run the checks twice.
+      if (containerRect.width === 0 && containerRect.height === 0) {
+        this._outlineGapCalculationNeededOnStable = true;
+        this._outlineGapCalculationNeededImmediately = false;
         return;
       }
 
-      const containerStart = this._getStartEnd(
-          this._connectionContainerRef.nativeElement.getBoundingClientRect());
-      const labelStart = this._getStartEnd(
-          this._label.nativeElement.children[0].getBoundingClientRect());
+      const containerStart = this._getStartEnd(containerRect);
+      const labelStart = this._getStartEnd(labelEl.children[0].getBoundingClientRect());
       let labelWidth = 0;
-      for (const child of this._label.nativeElement.children) {
+
+      for (const child of labelEl.children) {
         labelWidth += child.offsetWidth;
       }
-      this._outlineGapStart = labelStart - containerStart - outlineGapPadding;
-      this._outlineGapWidth = labelWidth * floatingLabelScale + outlineGapPadding * 2;
-    } else {
-      this._outlineGapStart = 0;
-      this._outlineGapWidth = 0;
+      startWidth = labelStart - containerStart - outlineGapPadding;
+      gapWidth = labelWidth > 0 ? labelWidth * floatingLabelScale + outlineGapPadding * 2 : 0;
     }
-    this._initialGapCalculated = true;
-    this._changeDetectorRef.markForCheck();
+
+    for (let i = 0; i < startEls.length; i++) {
+      startEls.item(i).style.width = `${startWidth}px`;
+    }
+    for (let i = 0; i < gapEls.length; i++) {
+      gapEls.item(i).style.width = `${gapWidth}px`;
+    }
+
+    this._outlineGapCalculationNeededOnStable =
+        this._outlineGapCalculationNeededImmediately = false;
   }
 
   /** Gets the start end of the rect considering the current directionality. */
   private _getStartEnd(rect: ClientRect): number {
     return this._dir && this._dir.value === 'rtl' ? rect.right : rect.left;
+  }
+
+  /**
+   * Updates the outline gap the new time the zone stabilizes.
+   * @breaking-change 7.0.0 Remove this method and only set the property once `_ngZone` is required.
+   */
+  private _updateOutlineGapOnStable() {
+    // @breaking-change 8.0.0 Remove this check and else block once _ngZone is required.
+    if (this._ngZone) {
+      this._outlineGapCalculationNeededOnStable = true;
+    } else {
+      Promise.resolve().then(() => this.updateOutlineGap());
+    }
   }
 }

@@ -6,12 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {
-  CdkNestedTreeNode,
-  CdkTree,
-  CdkTreeNode,
-  CdkTreeNodeDef,
-} from '@angular/cdk/tree';
+import {CdkNestedTreeNode, CdkTree, CdkTreeNode, CdkTreeNodeDef} from '@angular/cdk/tree';
 import {
   AfterContentInit,
   Attribute,
@@ -22,14 +17,22 @@ import {
   IterableDiffers,
   OnDestroy,
   QueryList,
-  TemplateRef,
 } from '@angular/core';
-import {CanDisable, HasTabIndex, mixinDisabled, mixinTabIndex} from '@angular/material/core';
+import {
+  CanDisable, CanDisableCtor,
+  HasTabIndex,
+  HasTabIndexCtor,
+  mixinDisabled,
+  mixinTabIndex,
+} from '@angular/material/core';
 import {MatTreeNodeOutlet} from './outlet';
 
+export const _MatTreeNodeMixinBase: HasTabIndexCtor & CanDisableCtor & typeof CdkTreeNode =
+    mixinTabIndex(mixinDisabled(CdkTreeNode));
 
-export const _MatTreeNodeMixinBase = mixinTabIndex(mixinDisabled(CdkTreeNode));
-export const _MatNestedTreeNodeMixinBase = mixinTabIndex(mixinDisabled(CdkNestedTreeNode));
+export const _MatNestedTreeNodeMixinBase:
+    HasTabIndexCtor & CanDisableCtor & typeof CdkNestedTreeNode =
+        mixinTabIndex(mixinDisabled(CdkNestedTreeNode));
 
 /**
  * Wrapper for the CdkTree node with Material design styles.
@@ -50,7 +53,7 @@ export class MatTreeNode<T> extends _MatTreeNodeMixinBase<T>
     implements CanDisable, HasTabIndex {
   @Input() role: 'treeitem' | 'group' = 'treeitem';
 
-  constructor(protected _elementRef: ElementRef,
+  constructor(protected _elementRef: ElementRef<HTMLElement>,
               protected _tree: CdkTree<T>,
               @Attribute('tabindex') tabIndex: string) {
     super(_elementRef, _tree);
@@ -71,15 +74,6 @@ export class MatTreeNode<T> extends _MatTreeNodeMixinBase<T>
 })
 export class MatTreeNodeDef<T> extends CdkTreeNodeDef<T> {
   @Input('matTreeNode') data: T;
-
-  // TODO(andrewseguin): Remove this explicitly set constructor when the compiler knows how to
-  // properly build the es6 version of the class. Currently sets ctorParameters to empty due to a
-  // fixed bug.
-  // https://github.com/angular/tsickle/pull/760 - tsickle PR that fixed this
-  // https://github.com/angular/angular/pull/23531 - updates compiler-cli to fixed version
-  constructor(template: TemplateRef<any>) {
-    super(template);
-  }
 }
 
 /**
@@ -106,7 +100,7 @@ export class MatNestedTreeNode<T> extends _MatNestedTreeNodeMixinBase<T>
 
   @ContentChildren(MatTreeNodeOutlet) nodeOutlet: QueryList<MatTreeNodeOutlet>;
 
-  constructor(protected _elementRef: ElementRef,
+  constructor(protected _elementRef: ElementRef<HTMLElement>,
               protected _tree: CdkTree<T>,
               protected _differs: IterableDiffers,
               @Attribute('tabindex') tabIndex: string) {

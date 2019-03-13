@@ -4,7 +4,11 @@ import {ComponentFixture, fakeAsync, flush, inject, TestBed, tick} from '@angula
 import {By} from '@angular/platform-browser';
 import {A11yModule} from '../index';
 import {LiveAnnouncer} from './live-announcer';
-import {LIVE_ANNOUNCER_ELEMENT_TOKEN} from './live-announcer-token';
+import {
+  LIVE_ANNOUNCER_ELEMENT_TOKEN,
+  LIVE_ANNOUNCER_DEFAULT_OPTIONS,
+  LiveAnnouncerDefaultOptions,
+} from './live-announcer-tokens';
 
 
 describe('LiveAnnouncer', () => {
@@ -60,6 +64,34 @@ describe('LiveAnnouncer', () => {
       expect(ariaLiveElement.getAttribute('aria-live')).toBe('polite');
     }));
 
+    it('should be able to clear out the aria-live element manually', fakeAsync(() => {
+      announcer.announce('Hey Google');
+      tick(100);
+      expect(ariaLiveElement.textContent).toBe('Hey Google');
+
+      announcer.clear();
+      expect(ariaLiveElement.textContent).toBeFalsy();
+    }));
+
+    it('should be able to clear out the aria-live element by setting a duration', fakeAsync(() => {
+      announcer.announce('Hey Google', 2000);
+      tick(100);
+      expect(ariaLiveElement.textContent).toBe('Hey Google');
+
+      tick(2000);
+      expect(ariaLiveElement.textContent).toBeFalsy();
+    }));
+
+    it('should clear the duration of previous messages when announcing a new one', fakeAsync(() => {
+      announcer.announce('Hey Google', 2000);
+      tick(100);
+      expect(ariaLiveElement.textContent).toBe('Hey Google');
+
+      announcer.announce('Hello there');
+      tick(2500);
+      expect(ariaLiveElement.textContent).toBe('Hello there');
+    }));
+
     it('should remove the aria-live element from the DOM on destroy', fakeAsync(() => {
       announcer.announce('Hey Google');
 
@@ -108,6 +140,30 @@ describe('LiveAnnouncer', () => {
           .toBe(1, 'Expected only one live announcer element in the DOM.');
     }));
 
+    it('should clear any previous timers when a new one is started', fakeAsync(() => {
+      expect(ariaLiveElement.textContent).toBeFalsy();
+
+      announcer.announce('One');
+      tick(50);
+
+      announcer.announce('Two');
+      tick(75);
+
+      expect(ariaLiveElement.textContent).toBeFalsy();
+
+      tick(25);
+
+      expect(ariaLiveElement.textContent).toBe('Two');
+    }));
+
+    it('should clear pending timeouts on destroy', fakeAsync(() => {
+      announcer.announce('Hey Google');
+      announcer.ngOnDestroy();
+
+      // Since we're testing whether the timeouts were flushed, we don't need any
+      // assertions here. `fakeAsync` will fail the test if a timer was left over.
+    }));
+
   });
 
   describe('with a custom element', () => {
@@ -137,6 +193,47 @@ describe('LiveAnnouncer', () => {
       expect(customLiveElement.textContent).toBe('Custom Element');
     }));
   });
+
+  describe('with a default options', () => {
+    beforeEach(() => {
+      return TestBed.configureTestingModule({
+        imports: [A11yModule],
+        declarations: [TestApp],
+        providers: [{
+          provide: LIVE_ANNOUNCER_DEFAULT_OPTIONS,
+          useValue: {
+            politeness: 'assertive',
+            duration: 1337
+          } as LiveAnnouncerDefaultOptions
+        }],
+      });
+    });
+
+    beforeEach(inject([LiveAnnouncer], (la: LiveAnnouncer) => {
+      announcer = la;
+      ariaLiveElement = getLiveElement();
+    }));
+
+    it('should pick up the default politeness from the injection token', fakeAsync(() => {
+      announcer.announce('Hello');
+
+      tick(2000);
+
+      expect(ariaLiveElement.getAttribute('aria-live')).toBe('assertive');
+    }));
+
+    it('should pick up the default politeness from the injection token', fakeAsync(() => {
+      announcer.announce('Hello');
+
+      tick(100);
+      expect(ariaLiveElement.textContent).toBe('Hello');
+
+      tick(1337);
+      expect(ariaLiveElement.textContent).toBeFalsy();
+    }));
+
+  });
+
 });
 
 describe('CdkAriaLive', () => {
@@ -207,6 +304,22 @@ describe('CdkAriaLive', () => {
 
     expect(announcer.announce).toHaveBeenCalledWith('Newest content', 'assertive');
   }));
+
+  it('should not announce the same text multiple times', fakeAsync(() => {
+    fixture.componentInstance.content = 'Content';
+    fixture.detectChanges();
+    invokeMutationCallbacks();
+    flush();
+
+    expect(announcer.announce).toHaveBeenCalledTimes(1);
+
+    fixture.detectChanges();
+    invokeMutationCallbacks();
+    flush();
+
+    expect(announcer.announce).toHaveBeenCalledTimes(1);
+  }));
+
 });
 
 

@@ -2,14 +2,16 @@ import {Directionality} from '@angular/cdk/bidi';
 import {ENTER, COMMA} from '@angular/cdk/keycodes';
 import {PlatformModule} from '@angular/cdk/platform';
 import {createKeyboardEvent} from '@angular/cdk/testing';
-import {Component, DebugElement} from '@angular/core';
+import {Component, DebugElement, ViewChild} from '@angular/core';
 import {async, ComponentFixture, TestBed} from '@angular/core/testing';
 import {By} from '@angular/platform-browser';
 import {NoopAnimationsModule} from '@angular/platform-browser/animations';
 import {MatFormFieldModule} from '@angular/material/form-field';
+import {Subject} from 'rxjs';
 import {MatChipInput, MatChipInputEvent} from './chip-input';
 import {MatChipsModule} from './index';
 import {MAT_CHIPS_DEFAULT_OPTIONS, MatChipsDefaultOptions} from './chip-default-options';
+import {MatChipList} from './chip-list';
 
 
 describe('MatChipInput', () => {
@@ -26,7 +28,10 @@ describe('MatChipInput', () => {
       declarations: [TestChipInput],
       providers: [{
         provide: Directionality, useFactory: () => {
-          return {value: dir.toLowerCase()};
+          return {
+            value: dir.toLowerCase(),
+            change: new Subject()
+          };
         }
       }]
     });
@@ -40,7 +45,7 @@ describe('MatChipInput', () => {
     fixture.detectChanges();
 
     inputDebugElement = fixture.debugElement.query(By.directive(MatChipInput));
-    chipInputDirective = inputDebugElement.injector.get(MatChipInput) as MatChipInput;
+    chipInputDirective = inputDebugElement.injector.get<MatChipInput>(MatChipInput);
     inputNativeElement = inputDebugElement.nativeElement;
   }));
 
@@ -80,6 +85,17 @@ describe('MatChipInput', () => {
       fixture.detectChanges();
 
       expect(label.textContent).toContain('or don\'t');
+    });
+
+    it('should become disabled if the chip list is disabled', () => {
+      expect(inputNativeElement.hasAttribute('disabled')).toBe(false);
+      expect(chipInputDirective.disabled).toBe(false);
+
+      fixture.componentInstance.chipListInstance.disabled = true;
+      fixture.detectChanges();
+
+      expect(inputNativeElement.getAttribute('disabled')).toBe('true');
+      expect(chipInputDirective.disabled).toBe(true);
     });
 
   });
@@ -160,7 +176,7 @@ describe('MatChipInput', () => {
       fixture.detectChanges();
 
       inputDebugElement = fixture.debugElement.query(By.directive(MatChipInput));
-      chipInputDirective = inputDebugElement.injector.get(MatChipInput) as MatChipInput;
+      chipInputDirective = inputDebugElement.injector.get<MatChipInput>(MatChipInput);
       inputNativeElement = inputDebugElement.nativeElement;
 
       spyOn(testChipInput, 'add');
@@ -168,6 +184,18 @@ describe('MatChipInput', () => {
 
       chipInputDirective._keydown(createKeyboardEvent('keydown', COMMA, inputNativeElement));
       expect(testChipInput.add).toHaveBeenCalled();
+    });
+
+    it('should not emit the chipEnd event if a separator is pressed with a modifier key', () => {
+      const ENTER_EVENT = createKeyboardEvent('keydown', ENTER, inputNativeElement);
+      Object.defineProperty(ENTER_EVENT, 'shiftKey', {get: () => true});
+      spyOn(testChipInput, 'add');
+
+      chipInputDirective.separatorKeyCodes = [ENTER];
+      fixture.detectChanges();
+
+      chipInputDirective._keydown(ENTER_EVENT);
+      expect(testChipInput.add).not.toHaveBeenCalled();
     });
 
   });
@@ -186,6 +214,7 @@ describe('MatChipInput', () => {
   `
 })
 class TestChipInput {
+  @ViewChild(MatChipList) chipListInstance: MatChipList;
   addOnBlur: boolean = false;
   placeholder = '';
 

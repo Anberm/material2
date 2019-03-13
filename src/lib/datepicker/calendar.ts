@@ -32,6 +32,7 @@ import {MatDatepickerIntl} from './datepicker-intl';
 import {MatMonthView} from './month-view';
 import {MatMultiYearView, yearsPerPage} from './multi-year-view';
 import {MatYearView} from './year-view';
+import {MatCalendarCellCssClasses} from './calendar-body';
 
 /**
  * Possible views for the calendar.
@@ -81,7 +82,7 @@ export class MatCalendarHeader<D> {
         this._intl.switchToMultiYearViewLabel : this._intl.switchToMonthViewLabel;
   }
 
-  /** The label for the the previous button. */
+  /** The label for the previous button. */
   get prevButtonLabel(): string {
     return {
       'month': this._intl.prevMonthLabel,
@@ -90,7 +91,7 @@ export class MatCalendarHeader<D> {
     }[this.calendar.currentView];
   }
 
-  /** The label for the the next button. */
+  /** The label for the next button. */
   get nextButtonLabel(): string {
     return {
       'month': this._intl.nextMonthLabel,
@@ -220,8 +221,11 @@ export class MatCalendar<D> implements AfterContentInit, AfterViewChecked, OnDes
   }
   private _maxDate: D | null;
 
-  /** A function used to filter which dates are selectable. */
+  /** Function used to filter which dates are selectable. */
   @Input() dateFilter: (date: D) => boolean;
+
+  /** Function that can be used to add custom CSS classes to dates. */
+  @Input() dateClass: (date: D) => MatCalendarCellCssClasses;
 
   /** Emits when the currently selected date changes. */
   @Output() readonly selectedChange: EventEmitter<D> = new EventEmitter<D>();
@@ -258,6 +262,7 @@ export class MatCalendar<D> implements AfterContentInit, AfterViewChecked, OnDes
   set activeDate(value: D) {
     this._clampedActiveDate = this._dateAdapter.clampDate(value, this.minDate, this.maxDate);
     this.stateChanges.next();
+    this._changeDetectorRef.markForCheck();
   }
   private _clampedActiveDate: D;
 
@@ -266,6 +271,7 @@ export class MatCalendar<D> implements AfterContentInit, AfterViewChecked, OnDes
   set currentView(value: MatCalendarView) {
     this._currentView = value;
     this._moveFocusOnNextTick = true;
+    this._changeDetectorRef.markForCheck();
   }
   private _currentView: MatCalendarView;
 
@@ -314,7 +320,8 @@ export class MatCalendar<D> implements AfterContentInit, AfterViewChecked, OnDes
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    const change = changes.minDate || changes.maxDate || changes.dateFilter;
+    const change =
+        changes['minDate'] || changes['maxDate'] || changes['dateFilter'];
 
     if (change && !change.firstChange) {
       const view = this._getCurrentViewComponent();

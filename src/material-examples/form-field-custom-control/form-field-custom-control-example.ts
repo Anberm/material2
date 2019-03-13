@@ -1,39 +1,47 @@
 import {FocusMonitor} from '@angular/cdk/a11y';
 import {coerceBooleanProperty} from '@angular/cdk/coercion';
-import {Component, ElementRef, Input, OnDestroy} from '@angular/core';
-import {FormBuilder, FormGroup} from '@angular/forms';
+import {Component, ElementRef, Input, OnDestroy, Optional, Self} from '@angular/core';
+import {FormBuilder, FormGroup, ControlValueAccessor, NgControl} from '@angular/forms';
 import {MatFormFieldControl} from '@angular/material';
 import {Subject} from 'rxjs';
+
+/** @title Form field with custom telephone number input control. */
+@Component({
+  selector: 'form-field-custom-control-example',
+  templateUrl: 'form-field-custom-control-example.html',
+  styleUrls: ['form-field-custom-control-example.css'],
+})
+export class FormFieldCustomControlExample {}
 
 /** Data structure for holding telephone number. */
 export class MyTel {
   constructor(public area: string, public exchange: string, public subscriber: string) {}
 }
 
-
 /** Custom `MatFormFieldControl` for telephone number input. */
 @Component({
-  selector: 'my-tel-input',
-  templateUrl: 'form-field-custom-control-example.html',
-  styleUrls: ['form-field-custom-control-example.css'],
+  selector: 'example-tel-input',
+  templateUrl: 'example-tel-input-example.html',
+  styleUrls: ['example-tel-input-example.css'],
   providers: [{provide: MatFormFieldControl, useExisting: MyTelInput}],
   host: {
-    '[class.floating]': 'shouldLabelFloat',
+    '[class.example-floating]': 'shouldLabelFloat',
     '[id]': 'id',
     '[attr.aria-describedby]': 'describedBy',
   }
 })
-export class MyTelInput implements MatFormFieldControl<MyTel>, OnDestroy {
+export class MyTelInput implements ControlValueAccessor, MatFormFieldControl<MyTel>, OnDestroy {
   static nextId = 0;
 
   parts: FormGroup;
   stateChanges = new Subject<void>();
   focused = false;
-  ngControl = null;
   errorState = false;
-  controlType = 'my-tel-input';
-  id = `my-tel-input-${MyTelInput.nextId++}`;
+  controlType = 'example-tel-input';
+  id = `example-tel-input-${MyTelInput.nextId++}`;
   describedBy = '';
+  onChange = (_: any) => {};
+  onTouched = () => {};
 
   get empty() {
     const {value: {area, exchange, subscriber}} = this.parts;
@@ -63,6 +71,7 @@ export class MyTelInput implements MatFormFieldControl<MyTel>, OnDestroy {
   get disabled(): boolean { return this._disabled; }
   set disabled(value: boolean) {
     this._disabled = coerceBooleanProperty(value);
+    this._disabled ? this.parts.disable() : this.parts.enable();
     this.stateChanges.next();
   }
   private _disabled = false;
@@ -81,22 +90,34 @@ export class MyTelInput implements MatFormFieldControl<MyTel>, OnDestroy {
     this.stateChanges.next();
   }
 
-  constructor(fb: FormBuilder, private fm: FocusMonitor, private elRef: ElementRef) {
+  constructor(
+    fb: FormBuilder,
+    private fm: FocusMonitor,
+    private elRef: ElementRef<HTMLElement>,
+    @Optional() @Self() public ngControl: NgControl) {
+
     this.parts = fb.group({
       area: '',
       exchange: '',
       subscriber: '',
     });
 
-    fm.monitor(elRef.nativeElement, true).subscribe(origin => {
+    fm.monitor(elRef, true).subscribe(origin => {
+      if (this.focused && !origin) {
+        this.onTouched();
+      }
       this.focused = !!origin;
       this.stateChanges.next();
     });
+
+    if (this.ngControl != null) {
+      this.ngControl.valueAccessor = this;
+    }
   }
 
   ngOnDestroy() {
     this.stateChanges.complete();
-    this.fm.stopMonitoring(this.elRef.nativeElement);
+    this.fm.stopMonitoring(this.elRef);
   }
 
   setDescribedByIds(ids: string[]) {
@@ -105,21 +126,27 @@ export class MyTelInput implements MatFormFieldControl<MyTel>, OnDestroy {
 
   onContainerClick(event: MouseEvent) {
     if ((event.target as Element).tagName.toLowerCase() != 'input') {
-      this.elRef.nativeElement.querySelector('input').focus();
+      this.elRef.nativeElement.querySelector('input')!.focus();
     }
   }
+
+  writeValue(tel: MyTel | null): void {
+    this.value = tel;
+  }
+
+  registerOnChange(fn: any): void {
+    this.onChange = fn;
+  }
+
+  registerOnTouched(fn: any): void {
+    this.onTouched = fn;
+  }
+
+  setDisabledState(isDisabled: boolean): void {
+    this.disabled = isDisabled;
+  }
+
+  _handleInput(): void {
+    this.onChange(this.parts.value);
+  }
 }
-
-
-/** @title Form field with custom telephone number input control. */
-@Component({
-  selector: 'form-field-custom-control-example',
-  template: `
-    <mat-form-field>
-      <my-tel-input placeholder="Phone number" required></my-tel-input>
-      <mat-icon matSuffix>phone</mat-icon>
-      <mat-hint>Include area code</mat-hint>
-    </mat-form-field>
-  `
-})
-export class FormFieldCustomControlExample {}

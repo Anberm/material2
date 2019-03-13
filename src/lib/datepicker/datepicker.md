@@ -246,7 +246,7 @@ export class MyComponent {
 
 <!-- example(datepicker-moment) -->
 
-By default the `MomentDateAdapter` will creates dates in your time zone specific locale. You can change the default behaviour to parse dates as UTC by providing the `MAT_MOMENT_DATA_ADAPTER_OPTIONS` and setting it to `useUtc: true`.
+By default the `MomentDateAdapter` will creates dates in your time zone specific locale. You can change the default behaviour to parse dates as UTC by providing the `MAT_MOMENT_DATE_ADAPTER_OPTIONS` and setting it to `useUtc: true`.
 
 ```ts
 @NgModule({
@@ -328,6 +328,14 @@ application root module.
 export class MyApp {}
 ```
 
+#### Highlighting specific dates
+If you want to apply one or more CSS classes to some dates in the calendar (e.g. to highlight a
+holiday), you can do so with the `dateClass` input. It accepts a function which will be called
+with each of the dates in the calendar and will apply any classes that are returned. The return
+value can be anything that is accepted by `ngClass`.
+
+<!-- example(datepicker-date-class) -->
+
 ### Accessibility
 
 The `MatDatepickerInput` and `MatDatepickerToggle` directives add the `aria-haspopup` attribute to
@@ -338,7 +346,7 @@ the native input and toggle button elements respectively, and they trigger a cal
 should have a placeholder or be given a meaningful label via `aria-label`, `aria-labelledby` or
 `MatDatepickerIntl`.
 
-#### Keyboard shortcuts
+#### Keyboard interaction
 
 The datepicker supports the following keyboard shortcuts:
 

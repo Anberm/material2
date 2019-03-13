@@ -63,7 +63,7 @@ export class MatBottomSheetContainer extends BasePortalOutlet implements OnDestr
   private _breakpointSubscription: Subscription;
 
   /** The portal outlet inside of this container into which the content will be loaded. */
-  @ViewChild(CdkPortalOutlet) _portalOutlet: CdkPortalOutlet;
+  @ViewChild(CdkPortalOutlet, {static: true}) _portalOutlet: CdkPortalOutlet;
 
   /** The state of the bottom sheet animations. */
   _animationState: 'void' | 'visible' | 'hidden' = 'void';
@@ -84,7 +84,7 @@ export class MatBottomSheetContainer extends BasePortalOutlet implements OnDestr
   private _destroyed: boolean;
 
   constructor(
-    private _elementRef: ElementRef,
+    private _elementRef: ElementRef<HTMLElement>,
     private _changeDetectorRef: ChangeDetectorRef,
     private _focusTrapFactory: FocusTrapFactory,
     breakpointObserver: BreakpointObserver,
@@ -146,7 +146,7 @@ export class MatBottomSheetContainer extends BasePortalOutlet implements OnDestr
   _onAnimationDone(event: AnimationEvent) {
     if (event.toState === 'hidden') {
       this._restoreFocus();
-    } else if (event.toState === 'visible' && this.bottomSheetConfig.autoFocus) {
+    } else if (event.toState === 'visible') {
       this._trapFocus();
     }
 
@@ -187,15 +187,17 @@ export class MatBottomSheetContainer extends BasePortalOutlet implements OnDestr
       this._focusTrap = this._focusTrapFactory.create(this._elementRef.nativeElement);
     }
 
-    this._focusTrap.focusInitialElementWhenReady();
+    if (this.bottomSheetConfig.autoFocus) {
+      this._focusTrap.focusInitialElementWhenReady();
+    }
   }
 
-  /** Restores focus to the element that was focused before the bottom sheet opened. */
+  /** Restores focus to the element that was focused before the bottom sheet was opened. */
   private _restoreFocus() {
     const toFocus = this._elementFocusedBeforeOpened;
 
     // We need the extra check, because IE can set the `activeElement` to null in some cases.
-    if (toFocus && typeof toFocus.focus === 'function') {
+    if (this.bottomSheetConfig.restoreFocus && toFocus && typeof toFocus.focus === 'function') {
       toFocus.focus();
     }
 

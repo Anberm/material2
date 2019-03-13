@@ -99,9 +99,10 @@ describe('MatDrawer', () => {
     it('should resolve the open method promise with the new state of the drawer', fakeAsync(() => {
       const fixture = TestBed.createComponent(BasicTestApp);
       fixture.detectChanges();
-      const drawer = fixture.debugElement.query(By.directive(MatDrawer));
+      const drawer: MatDrawer =
+          fixture.debugElement.query(By.directive(MatDrawer)).componentInstance;
 
-      drawer.componentInstance.open().then(result => expect(result).toBe('open'));
+      drawer.open().then(result => expect(result).toBe('open'));
       fixture.detectChanges();
       tick();
       fixture.detectChanges();
@@ -111,13 +112,14 @@ describe('MatDrawer', () => {
       const fixture = TestBed.createComponent(BasicTestApp);
       fixture.detectChanges();
       const drawer = fixture.debugElement.query(By.directive(MatDrawer));
+      const drawerInstance: MatDrawer = drawer.componentInstance;
 
-      drawer.componentInstance.open();
+      drawerInstance.open();
       fixture.detectChanges();
       flush();
       fixture.detectChanges();
 
-      drawer.componentInstance.close().then(result => expect(result).toBe('close'));
+      drawerInstance.close().then(result => expect(result).toBe('close'));
       fixture.detectChanges();
       flush();
       fixture.detectChanges();
@@ -280,6 +282,8 @@ describe('MatDrawer', () => {
       let fixture = TestBed.createComponent(BasicTestApp);
       let drawer: MatDrawer = fixture.debugElement
           .query(By.directive(MatDrawer)).componentInstance;
+      fixture.detectChanges();
+
       let openButton = fixture.componentInstance.openButton.nativeElement;
       let closeButton = fixture.componentInstance.closeButton.nativeElement;
 
@@ -695,6 +699,7 @@ describe('MatDrawerContainer', () => {
     it('should be able to explicitly enable the backdrop in `side` mode', fakeAsync(() => {
       const fixture = TestBed.createComponent(BasicTestApp);
       const root = fixture.nativeElement;
+      fixture.detectChanges();
 
       fixture.componentInstance.drawer.mode = 'side';
       fixture.detectChanges();
@@ -785,9 +790,9 @@ class BasicTestApp {
   hasBackdrop: boolean | null = null;
 
   @ViewChild('drawer') drawer: MatDrawer;
-  @ViewChild('drawerButton') drawerButton: ElementRef;
-  @ViewChild('openButton') openButton: ElementRef;
-  @ViewChild('closeButton') closeButton: ElementRef;
+  @ViewChild('drawerButton') drawerButton: ElementRef<HTMLButtonElement>;
+  @ViewChild('openButton') openButton: ElementRef<HTMLButtonElement>;
+  @ViewChild('closeButton') closeButton: ElementRef<HTMLButtonElement>;
 
   open() {
     this.openCount++;

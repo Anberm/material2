@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {coerceBooleanProperty, coerceNumberProperty} from '@angular/cdk/coercion';
+import {coerceBooleanProperty, coerceNumberProperty, coerceElement} from '@angular/cdk/coercion';
 import {
   AfterContentInit,
   Directive,
@@ -19,7 +19,7 @@ import {
   OnDestroy,
   Output,
 } from '@angular/core';
-import {Observable, Subject, Subscription} from 'rxjs';
+import {Observable, Subject, Subscription, Observer} from 'rxjs';
 import {debounceTime} from 'rxjs/operators';
 
 /**
@@ -54,8 +54,18 @@ export class ContentObserver implements OnDestroy {
    * Observe content changes on an element.
    * @param element The element to observe for content changes.
    */
-  observe(element: Element): Observable<MutationRecord[]> {
-    return Observable.create(observer => {
+  observe(element: Element): Observable<MutationRecord[]>;
+
+  /**
+   * Observe content changes on an element.
+   * @param element The element to observe for content changes.
+   */
+  observe(element: ElementRef<Element>): Observable<MutationRecord[]>;
+
+  observe(elementOrRef: Element | ElementRef<Element>): Observable<MutationRecord[]> {
+    const element = coerceElement(elementOrRef);
+
+    return new Observable((observer: Observer<MutationRecord[]>) => {
       const stream = this._observeElement(element);
       const subscription = stream.subscribe(observer);
 
@@ -135,11 +145,7 @@ export class CdkObserveContent implements AfterContentInit, OnDestroy {
   get disabled() { return this._disabled; }
   set disabled(value: any) {
     this._disabled = coerceBooleanProperty(value);
-    if (this._disabled) {
-      this._unsubscribe();
-    } else {
-      this._subscribe();
-    }
+    this._disabled ? this._unsubscribe() : this._subscribe();
   }
   private _disabled = false;
 
@@ -154,7 +160,8 @@ export class CdkObserveContent implements AfterContentInit, OnDestroy {
 
   private _currentSubscription: Subscription | null = null;
 
-  constructor(private _contentObserver: ContentObserver, private _elementRef: ElementRef,
+  constructor(private _contentObserver: ContentObserver,
+              private _elementRef: ElementRef<HTMLElement>,
               private _ngZone: NgZone) {}
 
   ngAfterContentInit() {
@@ -169,7 +176,7 @@ export class CdkObserveContent implements AfterContentInit, OnDestroy {
 
   private _subscribe() {
     this._unsubscribe();
-    const stream = this._contentObserver.observe(this._elementRef.nativeElement);
+    const stream = this._contentObserver.observe(this._elementRef);
 
     // TODO(mmalerba): We shouldn't be emitting on this @Output() outside the zone.
     // Consider brining it back inside the zone next time we're making breaking changes.

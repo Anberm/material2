@@ -1,4 +1,4 @@
-import {ViewportRuler} from '@angular/cdk/scrolling';
+import {ViewportRuler, ScrollingModule} from '@angular/cdk/scrolling';
 import {
   CdkTableModule,
   DataSource
@@ -47,6 +47,7 @@ import {
 import {BrowserModule} from '@angular/platform-browser';
 import {ServerModule} from '@angular/platform-server';
 import {FocusMonitor} from '@angular/cdk/a11y';
+import {DragDropModule} from '@angular/cdk/drag-drop';
 import {Observable, of as observableOf} from 'rxjs';
 
 export class TableDataSource extends DataSource<any> {
@@ -67,7 +68,6 @@ export class TestEntryComponent {}
 @Component({
   selector: 'kitchen-sink',
   templateUrl: './kitchen-sink.html',
-  styleUrls: ['./kitchen-sink.css'],
 })
 export class KitchenSink {
 
@@ -77,6 +77,9 @@ export class KitchenSink {
   /** Data source for the CDK and Material table. */
   tableDataSource = new TableDataSource();
 
+  /** Data used to render a virtual scrolling list. */
+  virtualScrollData = Array(10000).fill(50);
+
   constructor(
     snackBar: MatSnackBar,
     dialog: MatDialog,
@@ -84,7 +87,7 @@ export class KitchenSink {
     focusMonitor: FocusMonitor,
     elementRef: ElementRef<HTMLElement>,
     bottomSheet: MatBottomSheet) {
-    focusMonitor.focusVia(elementRef.nativeElement, 'program');
+    focusMonitor.focusVia(elementRef, 'program');
     snackBar.open('Hello there');
     dialog.open(TestEntryComponent);
     bottomSheet.open(TestEntryComponent);
@@ -135,9 +138,11 @@ export class KitchenSink {
     MatSortModule,
     MatTableModule,
     MatStepperModule,
+    ScrollingModule,
 
     // CDK Modules
-    CdkTableModule
+    CdkTableModule,
+    DragDropModule,
   ],
   bootstrap: [KitchenSink],
   declarations: [KitchenSink, TestEntryComponent],

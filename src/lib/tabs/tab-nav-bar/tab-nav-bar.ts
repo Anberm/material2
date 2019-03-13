@@ -29,10 +29,10 @@ import {
   ViewEncapsulation,
 } from '@angular/core';
 import {
-  CanColor,
-  CanDisable,
-  CanDisableRipple,
-  HasTabIndex,
+  CanColor, CanColorCtor,
+  CanDisable, CanDisableCtor,
+  CanDisableRipple, CanDisableRippleCtor,
+  HasTabIndex, HasTabIndexCtor,
   MAT_RIPPLE_GLOBAL_OPTIONS,
   mixinColor,
   mixinDisabled,
@@ -54,7 +54,8 @@ import {FocusMonitor} from '@angular/cdk/a11y';
 export class MatTabNavBase {
   constructor(public _elementRef: ElementRef) {}
 }
-export const _MatTabNavMixinBase = mixinDisableRipple(mixinColor(MatTabNavBase, 'primary'));
+export const _MatTabNavMixinBase: CanDisableRippleCtor & CanColorCtor & typeof MatTabNavBase =
+    mixinDisableRipple(mixinColor(MatTabNavBase, 'primary'));
 
 /**
  * Navigation component matching the styles of the tab group header.
@@ -78,9 +79,9 @@ export class MatTabNav extends _MatTabNavMixinBase
   private readonly _onDestroy = new Subject<void>();
 
   private _activeLinkChanged: boolean;
-  private _activeLinkElement: ElementRef | null;
+  private _activeLinkElement: ElementRef<HTMLElement> | null;
 
-  @ViewChild(MatInkBar) _inkBar: MatInkBar;
+  @ViewChild(MatInkBar, {static: true}) _inkBar: MatInkBar;
 
   /** Query list of all tab links of the tab navigation. */
   @ContentChildren(forwardRef(() => MatTabLink), {descendants: true})
@@ -112,11 +113,11 @@ export class MatTabNav extends _MatTabNavMixinBase
 
   /**
    * Notifies the component that the active link has been changed.
-   * @breaking-change 7.0.0 `element` parameter to be removed.
+   * @breaking-change 8.0.0 `element` parameter to be removed.
    */
   updateActiveLink(element: ElementRef) {
     // Note: keeping the `element` for backwards-compat, but isn't being used for anything.
-    // @breaking-change 7.0.0
+    // @breaking-change 8.0.0
     this._activeLinkChanged = !!element;
     this._changeDetectorRef.markForCheck();
   }
@@ -161,8 +162,9 @@ export class MatTabNav extends _MatTabNavMixinBase
 
 // Boilerplate for applying mixins to MatTabLink.
 export class MatTabLinkBase {}
-export const _MatTabLinkMixinBase =
-  mixinTabIndex(mixinDisableRipple(mixinDisabled(MatTabLinkBase)));
+export const _MatTabLinkMixinBase:
+    HasTabIndexCtor & CanDisableRippleCtor & CanDisableCtor & typeof MatTabLinkBase =
+        mixinTabIndex(mixinDisableRipple(mixinDisabled(MatTabLinkBase)));
 
 /**
  * Link inside of a `mat-tab-nav-bar`.
@@ -178,7 +180,6 @@ export const _MatTabLinkMixinBase =
     '[attr.tabIndex]': 'tabIndex',
     '[class.mat-tab-disabled]': 'disabled',
     '[class.mat-tab-label-active]': 'active',
-    '(click)': '_handleClick($event)'
   }
 })
 export class MatTabLink extends _MatTabLinkMixinBase
@@ -189,9 +190,6 @@ export class MatTabLink extends _MatTabLinkMixinBase
 
   /** Reference to the RippleRenderer for the tab-link. */
   protected _tabLinkRipple: RippleRenderer;
-
-  /** Whether the ripples are globally disabled through the RippleGlobalOptions */
-  private _ripplesGloballyDisabled = false;
 
   /** Whether the link is active. */
   @Input()
@@ -204,50 +202,44 @@ export class MatTabLink extends _MatTabLinkMixinBase
   }
 
   /**
-   * Ripple configuration for ripples that are launched on pointer down.
+   * Ripple configuration for ripples that are launched on pointer down. The ripple config
+   * is set to the global ripple options since we don't have any configurable options for
+   * the tab link ripples.
    * @docs-private
    */
-  rippleConfig: RippleConfig = {};
+  rippleConfig: RippleConfig & RippleGlobalOptions;
 
   /**
-   * Whether ripples are disabled on interaction
+   * Whether ripples are disabled on interaction.
    * @docs-private
    */
   get rippleDisabled(): boolean {
     return this.disabled || this.disableRipple || this._tabNavBar.disableRipple ||
-      this._ripplesGloballyDisabled;
+      !!this.rippleConfig.disabled;
   }
 
   constructor(private _tabNavBar: MatTabNav,
               public _elementRef: ElementRef,
               ngZone: NgZone,
               platform: Platform,
-              @Optional() @Inject(MAT_RIPPLE_GLOBAL_OPTIONS) globalOptions: RippleGlobalOptions,
+              @Optional() @Inject(MAT_RIPPLE_GLOBAL_OPTIONS)
+              globalRippleOptions: RippleGlobalOptions | null,
               @Attribute('tabindex') tabIndex: string,
               /**
                * @deprecated
-               * @breaking-change 7.0.0 `_focusMonitor` parameter to be made required.
+               * @breaking-change 8.0.0 `_focusMonitor` parameter to be made required.
                */
               private _focusMonitor?: FocusMonitor) {
     super();
 
     this._tabLinkRipple = new RippleRenderer(this, ngZone, _elementRef, platform);
     this._tabLinkRipple.setupTriggerEvents(_elementRef.nativeElement);
+    this.rippleConfig = globalRippleOptions || {};
 
     this.tabIndex = parseInt(tabIndex) || 0;
 
-    if (globalOptions) {
-      this._ripplesGloballyDisabled = !!globalOptions.disabled;
-      // TODO(paul): Once the speedFactor is removed, we no longer need to copy each single option.
-      this.rippleConfig = {
-        terminateOnPointerUp: globalOptions.terminateOnPointerUp,
-        speedFactor: globalOptions.baseSpeedFactor,
-        animation: globalOptions.animation,
-      };
-    }
-
     if (_focusMonitor) {
-      _focusMonitor.monitor(_elementRef.nativeElement);
+      _focusMonitor.monitor(_elementRef);
     }
   }
 
@@ -255,16 +247,7 @@ export class MatTabLink extends _MatTabLinkMixinBase
     this._tabLinkRipple._removeTriggerEvents();
 
     if (this._focusMonitor) {
-      this._focusMonitor.stopMonitoring(this._elementRef.nativeElement);
-    }
-  }
-
-  /**
-   * Handles the click event, preventing default navigation if the tab link is disabled.
-   */
-  _handleClick(event: MouseEvent) {
-    if (this.disabled) {
-      event.preventDefault();
+      this._focusMonitor.stopMonitoring(this._elementRef);
     }
   }
 }

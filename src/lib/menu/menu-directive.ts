@@ -9,7 +9,16 @@
 import {FocusKeyManager, FocusOrigin} from '@angular/cdk/a11y';
 import {Direction} from '@angular/cdk/bidi';
 import {coerceBooleanProperty} from '@angular/cdk/coercion';
-import {ESCAPE, LEFT_ARROW, RIGHT_ARROW, DOWN_ARROW, UP_ARROW} from '@angular/cdk/keycodes';
+import {
+  ESCAPE,
+  LEFT_ARROW,
+  RIGHT_ARROW,
+  DOWN_ARROW,
+  UP_ARROW,
+  HOME,
+  END,
+  hasModifierKey,
+} from '@angular/cdk/keycodes';
 import {
   AfterContentInit,
   ChangeDetectionStrategy,
@@ -69,7 +78,7 @@ export const MAT_MENU_DEFAULT_OPTIONS =
 /** @docs-private */
 export function MAT_MENU_DEFAULT_OPTIONS_FACTORY(): MatMenuDefaultOptions {
   return {
-    overlapTrigger: true,
+    overlapTrigger: false,
     xPosition: 'after',
     yPosition: 'below',
     backdropClass: 'cdk-overlay-transparent-backdrop',
@@ -79,7 +88,7 @@ export function MAT_MENU_DEFAULT_OPTIONS_FACTORY(): MatMenuDefaultOptions {
  * Start elevation for the menu panel.
  * @docs-private
  */
-const MAT_MENU_BASE_ELEVATION = 2;
+const MAT_MENU_BASE_ELEVATION = 4;
 
 
 @Component({
@@ -162,7 +171,7 @@ export class MatMenu implements AfterContentInit, MatMenuPanel<MatMenuItem>, OnI
   /**
    * List of the items inside of a menu.
    * @deprecated
-   * @breaking-change 7.0.0
+   * @breaking-change 8.0.0
    */
   @ContentChildren(MatMenuItem) items: QueryList<MatMenuItem>;
 
@@ -196,22 +205,32 @@ export class MatMenu implements AfterContentInit, MatMenuPanel<MatMenuItem>, OnI
    */
   @Input('class')
   set panelClass(classes: string) {
+    const previousPanelClass = this._previousPanelClass;
+
+    if (previousPanelClass && previousPanelClass.length) {
+      previousPanelClass.split(' ').forEach((className: string) => {
+        this._classList[className] = false;
+      });
+    }
+
+    this._previousPanelClass = classes;
+
     if (classes && classes.length) {
-      this._classList = classes.split(' ').reduce((obj: any, className: string) => {
-        obj[className] = true;
-        return obj;
-      }, {});
+      classes.split(' ').forEach((className: string) => {
+        this._classList[className] = true;
+      });
 
       this._elementRef.nativeElement.className = '';
     }
   }
+  private _previousPanelClass: string;
 
   /**
    * This method takes classes set on the host mat-menu element and applies them on the
    * menu template that displays in the overlay container.  Otherwise, it's difficult
    * to style the containing menu from outside the component.
    * @deprecated Use `panelClass` instead.
-   * @breaking-change 7.0.0
+   * @breaking-change 8.0.0
    */
   @Input()
   get classList(): string { return this.panelClass; }
@@ -224,12 +243,12 @@ export class MatMenu implements AfterContentInit, MatMenuPanel<MatMenuItem>, OnI
   /**
    * Event emitted when the menu is closed.
    * @deprecated Switch to `closed` instead
-   * @breaking-change 7.0.0
+   * @breaking-change 8.0.0
    */
   @Output() close = this.closed;
 
   constructor(
-    private _elementRef: ElementRef,
+    private _elementRef: ElementRef<HTMLElement>,
     private _ngZone: NgZone,
     @Inject(MAT_MENU_DEFAULT_OPTIONS) private _defaultOptions: MatMenuDefaultOptions) { }
 
@@ -258,11 +277,11 @@ export class MatMenu implements AfterContentInit, MatMenuPanel<MatMenuItem>, OnI
   /** Handle a keyboard event from the menu, delegating to the appropriate action. */
   _handleKeydown(event: KeyboardEvent) {
     const keyCode = event.keyCode;
+    const manager = this._keyManager;
 
     switch (keyCode) {
       case ESCAPE:
         this.closed.emit('keydown');
-        event.stopPropagation();
       break;
       case LEFT_ARROW:
         if (this.parentMenu && this.direction === 'ltr') {
@@ -274,12 +293,19 @@ export class MatMenu implements AfterContentInit, MatMenuPanel<MatMenuItem>, OnI
           this.closed.emit('keydown');
         }
       break;
+      case HOME:
+      case END:
+        if (!hasModifierKey(event)) {
+          keyCode === HOME ? manager.setFirstItemActive() : manager.setLastItemActive();
+          event.preventDefault();
+        }
+      break;
       default:
         if (keyCode === UP_ARROW || keyCode === DOWN_ARROW) {
-          this._keyManager.setFocusOrigin('keyboard');
+          manager.setFocusOrigin('keyboard');
         }
 
-        this._keyManager.onKeydown(event);
+        manager.onKeydown(event);
     }
   }
 
@@ -371,13 +397,13 @@ export class MatMenu implements AfterContentInit, MatMenuPanel<MatMenuItem>, OnI
 
   /** Starts the enter animation. */
   _startAnimation() {
-    // @breaking-change 7.0.0 Combine with _resetAnimation.
+    // @breaking-change 8.0.0 Combine with _resetAnimation.
     this._panelAnimationState = 'enter';
   }
 
   /** Resets the panel animation to its initial state. */
   _resetAnimation() {
-    // @breaking-change 7.0.0 Combine with _startAnimation.
+    // @breaking-change 8.0.0 Combine with _startAnimation.
     this._panelAnimationState = 'void';
   }
 
@@ -385,13 +411,17 @@ export class MatMenu implements AfterContentInit, MatMenuPanel<MatMenuItem>, OnI
   _onAnimationDone(event: AnimationEvent) {
     this._animationDone.next(event);
     this._isAnimating = false;
+  }
 
-    // Scroll the content element to the top once the animation is done. This is necessary, because
-    // we move focus to the first item while it's still being animated, which can throw the browser
-    // off when it determines the scroll position. Alternatively we can move focus when the
-    // animation is done, however moving focus asynchronously will interrupt screen readers
-    // which are in the process of reading out the menu already. We take the `element` from
-    // the `event` since we can't use a `ViewChild` to access the pane.
+  _onAnimationStart(event: AnimationEvent) {
+    this._isAnimating = true;
+
+    // Scroll the content element to the top as soon as the animation starts. This is necessary,
+    // because we move focus to the first item while it's still being animated, which can throw
+    // the browser off when it determines the scroll position. Alternatively we can move focus
+    // when the animation is done, however moving focus asynchronously will interrupt screen
+    // readers which are in the process of reading out the menu already. We take the `element`
+    // from the `event` since we can't use a `ViewChild` to access the pane.
     if (event.toState === 'enter' && this._keyManager.activeItemIndex === 0) {
       event.element.scrollTop = 0;
     }

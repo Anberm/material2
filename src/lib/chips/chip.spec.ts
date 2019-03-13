@@ -1,9 +1,11 @@
 import {Directionality} from '@angular/cdk/bidi';
 import {BACKSPACE, DELETE, SPACE} from '@angular/cdk/keycodes';
-import {createKeyboardEvent} from '@angular/cdk/testing';
+import {createKeyboardEvent, dispatchFakeEvent} from '@angular/cdk/testing';
 import {Component, DebugElement} from '@angular/core';
 import {async, ComponentFixture, TestBed} from '@angular/core/testing';
+import {MAT_RIPPLE_GLOBAL_OPTIONS, RippleGlobalOptions} from '@angular/material/core';
 import {By} from '@angular/platform-browser';
+import {Subject} from 'rxjs';
 import {MatChip, MatChipEvent, MatChipSelectionChange, MatChipsModule} from './index';
 
 
@@ -12,16 +14,22 @@ describe('Chips', () => {
   let chipDebugElement: DebugElement;
   let chipNativeElement: HTMLElement;
   let chipInstance: MatChip;
+  let globalRippleOptions: RippleGlobalOptions;
 
   let dir = 'ltr';
 
   beforeEach(async(() => {
+    globalRippleOptions = {};
     TestBed.configureTestingModule({
       imports: [MatChipsModule],
       declarations: [BasicChip, SingleChip],
-      providers: [{
-        provide: Directionality, useFactory: () => ({value: dir})
-      }]
+      providers: [
+        {provide: MAT_RIPPLE_GLOBAL_OPTIONS, useFactory: () => globalRippleOptions},
+        {provide: Directionality, useFactory: () => ({
+          value: dir,
+          change: new Subject()
+        })},
+      ]
     });
 
     TestBed.compileComponents();
@@ -35,7 +43,7 @@ describe('Chips', () => {
 
       chipDebugElement = fixture.debugElement.query(By.directive(MatChip));
       chipNativeElement = chipDebugElement.nativeElement;
-      chipInstance = chipDebugElement.injector.get(MatChip);
+      chipInstance = chipDebugElement.injector.get<MatChip>(MatChip);
 
       document.body.appendChild(chipNativeElement);
     });
@@ -59,7 +67,7 @@ describe('Chips', () => {
 
       chipDebugElement = fixture.debugElement.query(By.directive(MatChip));
       chipNativeElement = chipDebugElement.nativeElement;
-      chipInstance = chipDebugElement.injector.get(MatChip);
+      chipInstance = chipDebugElement.injector.get<MatChip>(MatChip);
       testComponent = fixture.debugElement.componentInstance;
 
       document.body.appendChild(chipNativeElement);
@@ -131,6 +139,80 @@ describe('Chips', () => {
         fixture.detectChanges();
 
         expect(testComponent.chipRemove).toHaveBeenCalledWith({chip: chipInstance});
+      });
+
+      it('should not prevent the default click action', () => {
+        const event = dispatchFakeEvent(chipNativeElement, 'click');
+        fixture.detectChanges();
+
+        expect(event.defaultPrevented).toBe(false);
+      });
+
+      it('should prevent the default click action when the chip is disabled', () => {
+        chipInstance.disabled = true;
+        fixture.detectChanges();
+
+        const event = dispatchFakeEvent(chipNativeElement, 'click');
+        fixture.detectChanges();
+
+        expect(event.defaultPrevented).toBe(true);
+      });
+
+      it('should not dispatch `selectionChange` event when deselecting a non-selected chip', () => {
+        chipInstance.deselect();
+
+        const spy = jasmine.createSpy('selectionChange spy');
+        const subscription = chipInstance.selectionChange.subscribe(spy);
+
+        chipInstance.deselect();
+
+        expect(spy).not.toHaveBeenCalled();
+        subscription.unsubscribe();
+      });
+
+      it('should not dispatch `selectionChange` event when selecting a selected chip', () => {
+        chipInstance.select();
+
+        const spy = jasmine.createSpy('selectionChange spy');
+        const subscription = chipInstance.selectionChange.subscribe(spy);
+
+        chipInstance.select();
+
+        expect(spy).not.toHaveBeenCalled();
+        subscription.unsubscribe();
+      });
+
+      it('should not dispatch `selectionChange` event when selecting a selected chip via ' +
+        'user interaction', () => {
+          chipInstance.select();
+
+          const spy = jasmine.createSpy('selectionChange spy');
+          const subscription = chipInstance.selectionChange.subscribe(spy);
+
+          chipInstance.selectViaInteraction();
+
+          expect(spy).not.toHaveBeenCalled();
+          subscription.unsubscribe();
+        });
+
+      it('should not dispatch `selectionChange` through setter if the value did not change', () => {
+        chipInstance.selected = false;
+
+        const spy = jasmine.createSpy('selectionChange spy');
+        const subscription = chipInstance.selectionChange.subscribe(spy);
+
+        chipInstance.selected = false;
+
+        expect(spy).not.toHaveBeenCalled();
+        subscription.unsubscribe();
+      });
+
+      it('should be able to disable ripples through ripple global options at runtime', () => {
+        expect(chipInstance.rippleDisabled).toBe(false, 'Expected chip ripples to be enabled.');
+
+        globalRippleOptions.disabled = true;
+
+        expect(chipInstance.rippleDisabled).toBe(true, 'Expected chip ripples to be disabled.');
       });
     });
 

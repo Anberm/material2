@@ -1,11 +1,11 @@
 const path = require('path');
 const {customLaunchers, platformMap} = require('./browser-providers');
 
-module.exports = (config) => {
-
+module.exports = config => {
   config.set({
     basePath: path.join(__dirname, '..'),
     frameworks: ['jasmine'],
+    middleware: ['fake-url'],
     plugins: [
       require('karma-jasmine'),
       require('karma-browserstack-launcher'),
@@ -13,11 +13,22 @@ module.exports = (config) => {
       require('karma-chrome-launcher'),
       require('karma-firefox-launcher'),
       require('karma-sourcemap-loader'),
-      require('karma-coverage'),
+      {'middleware:fake-url': ['factory', function() {
+        // Middleware that avoids triggering 404s during tests that need to reference
+        // image paths. Assumes that the image path will start with `/$`.
+        return function(request, response, next) {
+          if (request.url.indexOf('/$') === 0) {
+            response.writeHead(200);
+            return response.end();
+          }
+
+          next();
+        }
+      }]}
     ],
     files: [
       {pattern: 'node_modules/core-js/client/core.min.js', included: true, watched: false},
-      {pattern: 'node_modules/tslib/tslib.js', included: true, watched: false},
+      {pattern: 'node_modules/tslib/tslib.js', included: false, watched: false},
       {pattern: 'node_modules/systemjs/dist/system.js', included: true, watched: false},
       {pattern: 'node_modules/zone.js/dist/zone.min.js', included: true, watched: false},
       {pattern: 'node_modules/zone.js/dist/proxy.min.js', included: true, watched: false},
@@ -26,7 +37,7 @@ module.exports = (config) => {
       {pattern: 'node_modules/zone.js/dist/async-test.js', included: true, watched: false},
       {pattern: 'node_modules/zone.js/dist/fake-async-test.js', included: true, watched: false},
       {pattern: 'node_modules/hammerjs/hammer.min.js', included: true, watched: false},
-      {pattern: 'node_modules/moment/min/moment-with-locales.min.js', included: true, watched: false},
+      {pattern: 'node_modules/moment/min/moment-with-locales.min.js', included: false, watched: false},
 
       // Include all Angular dependencies
       {pattern: 'node_modules/@angular/**/*', included: false, watched: false},
@@ -51,12 +62,6 @@ module.exports = (config) => {
 
     reporters: ['dots'],
     autoWatch: false,
-
-    coverageReporter: {
-      type : 'json-summary',
-      dir : 'dist/coverage/',
-      subdir: '.'
-    },
 
     sauceLabs: {
       testName: 'Angular Material Unit Tests',
@@ -100,38 +105,64 @@ module.exports = (config) => {
     },
   });
 
-  if (process.env['TRAVIS']) {
-    const buildId = `TRAVIS #${process.env.TRAVIS_BUILD_NUMBER} (${process.env.TRAVIS_BUILD_ID})`;
+  if (process.env['CIRCLECI']) {
+    const containerInstanceIndex = Number(process.env['CIRCLE_NODE_INDEX']);
+    const maxParallelContainerInstances = Number(process.env['CIRCLE_NODE_TOTAL']);
+    const tunnelIdentifier =
+        `angular-material-${process.env['CIRCLE_BUILD_NUM']}-${containerInstanceIndex}`;
+    const buildIdentifier = `circleci-${tunnelIdentifier}`;
+    const testPlatform = process.env['TEST_PLATFORM'];
 
-    if (process.env['TRAVIS_PULL_REQUEST'] === 'false' &&
-        process.env['MODE'] === "travis_required") {
+    // This defines how often a given browser should be launched in the same CircleCI
+    // container. This is helpful if we want to shard tests across the same browser.
+    const parallelBrowserInstances = Number(process.env['KARMA_PARALLEL_BROWSERS']) || 1;
 
-      config.preprocessors['dist/packages/**/!(*+(.|-)spec).js'] = ['coverage'];
-      config.reporters.push('coverage');
+    // In case there should be multiple instances of the browsers, we need to set up the
+    // the karma-parallel plugin.
+    if (parallelBrowserInstances > 1) {
+      config.frameworks.unshift('parallel');
+      config.plugins.push(require('karma-parallel'));
+      config.parallelOptions = {
+        executors: parallelBrowserInstances,
+        shardStrategy: 'round-robin',
+      }
     }
 
-    // The MODE variable is the indicator of what row in the test matrix we're running.
-    // It will look like <platform>_<target>, where platform is one of 'saucelabs', 'browserstack'
-    // or 'travis'. The target is a reference to different collections of browsers that can run
-    // in the previously specified platform.
-    const [platform, target] = process.env.MODE.split('_');
-
-    if (platform === 'saucelabs') {
-      config.sauceLabs.build = buildId;
-      config.sauceLabs.tunnelIdentifier = process.env.TRAVIS_JOB_ID;
-    } else if (platform === 'browserstack') {
-      config.browserStack.build = buildId;
-      config.browserStack.tunnelIdentifier = process.env.TRAVIS_JOB_ID;
-    } else if (platform !== 'travis') {
-      throw new Error(`Platform "${platform}" unknown, but Travis specified. Exiting.`);
+    if (testPlatform === 'browserstack') {
+      config.browserStack.build = buildIdentifier;
+      config.browserStack.tunnelIdentifier = tunnelIdentifier;
+    } else if (testPlatform === 'saucelabs') {
+      config.sauceLabs.build = buildIdentifier;
+      config.sauceLabs.tunnelIdentifier = tunnelIdentifier;
+      // Setup the saucelabs reporter so that we report back to Saucelabs once
+      // our tests finished.
+      config.reporters.push('saucelabs');
     }
 
-    if (platform !== 'travis') {
-      // To guarantee a better stability for tests running on external browsers, we disable
-      // concurrency. Stability is compared to speed more important.
-      config.concurrency = 1;
-    }
+    const platformBrowsers = platformMap[testPlatform];
+    const browserInstanceChunks = splitBrowsersIntoInstances(
+        platformBrowsers, maxParallelContainerInstances);
 
-    config.browsers = platformMap[platform][target.toLowerCase()];
+    // Configure Karma to launch the browsers that belong to the given test platform and
+    // container instance.
+    config.browsers = browserInstanceChunks[containerInstanceIndex];
   }
 };
+
+/**
+ * Splits the specified browsers into a maximum amount of chunks. The chunk of browsers
+ * are being created deterministically and therefore we get reproducible tests when executing
+ * the same CircleCI instance multiple times.
+ */
+function splitBrowsersIntoInstances(browsers, maxInstances) {
+  let chunks = [];
+  let assignedBrowsers = 0;
+
+  for (let i = 0; i < maxInstances; i++) {
+    const chunkSize = Math.floor((browsers.length - assignedBrowsers) / (maxInstances - i));
+    chunks[i] = browsers.slice(assignedBrowsers, assignedBrowsers + chunkSize);
+    assignedBrowsers += chunkSize;
+  }
+
+  return chunks;
+}

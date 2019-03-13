@@ -11,7 +11,10 @@ import {DOCUMENT} from '@angular/common';
 import {ElementRef, Inject, Injectable, Optional} from '@angular/core';
 import {OriginConnectionPosition, OverlayConnectionPosition} from './connected-position';
 import {ConnectedPositionStrategy} from './connected-position-strategy';
-import {FlexibleConnectedPositionStrategy} from './flexible-connected-position-strategy';
+import {
+  FlexibleConnectedPositionStrategy,
+  FlexibleConnectedPositionStrategyOrigin,
+} from './flexible-connected-position-strategy';
 import {GlobalPositionStrategy} from './global-position-strategy';
 import {Platform} from '@angular/cdk/platform';
 import {OverlayContainer} from '../overlay-container';
@@ -23,7 +26,7 @@ export class OverlayPositionBuilder {
   constructor(
     private _viewportRuler: ViewportRuler,
     @Inject(DOCUMENT) private _document: any,
-    // @breaking-change 7.0.0 `_platform` and `_overlayContainer` parameters to be made required.
+    // @breaking-change 8.0.0 `_platform` and `_overlayContainer` parameters to be made required.
     @Optional() private _platform?: Platform,
     @Optional() private _overlayContainer?: OverlayContainer) { }
 
@@ -40,7 +43,7 @@ export class OverlayPositionBuilder {
    * @param originPos
    * @param overlayPos
    * @deprecated Use `flexibleConnectedTo` instead.
-   * @breaking-change 7.0.0
+   * @breaking-change 8.0.0
    */
   connectedTo(
       elementRef: ElementRef,
@@ -53,10 +56,11 @@ export class OverlayPositionBuilder {
 
   /**
    * Creates a flexible position strategy.
-   * @param elementRef
+   * @param origin Origin relative to which to position the overlay.
    */
-  flexibleConnectedTo(elementRef: ElementRef | HTMLElement): FlexibleConnectedPositionStrategy {
-    return new FlexibleConnectedPositionStrategy(elementRef, this._viewportRuler, this._document,
+  flexibleConnectedTo(origin: FlexibleConnectedPositionStrategyOrigin):
+    FlexibleConnectedPositionStrategy {
+    return new FlexibleConnectedPositionStrategy(origin, this._viewportRuler, this._document,
         this._platform, this._overlayContainer);
   }
 

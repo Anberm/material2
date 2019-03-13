@@ -1,7 +1,8 @@
 import {async, ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
 import {Component, ViewChild, ViewChildren, QueryList} from '@angular/core';
+import {MAT_RIPPLE_GLOBAL_OPTIONS, RippleGlobalOptions} from '@angular/material/core';
 import {By} from '@angular/platform-browser';
-import {dispatchFakeEvent, dispatchMouseEvent, createMouseEvent} from '@angular/cdk/testing';
+import {dispatchFakeEvent, dispatchMouseEvent} from '@angular/cdk/testing';
 import {Direction, Directionality} from '@angular/cdk/bidi';
 import {Subject} from 'rxjs';
 import {MatTabLink, MatTabNav, MatTabsModule} from '../index';
@@ -10,8 +11,11 @@ import {MatTabLink, MatTabNav, MatTabsModule} from '../index';
 describe('MatTabNavBar', () => {
   let dir: Direction = 'ltr';
   let dirChange = new Subject();
+  let globalRippleOptions: RippleGlobalOptions;
 
   beforeEach(async(() => {
+    globalRippleOptions = {};
+
     TestBed.configureTestingModule({
       imports: [MatTabsModule],
       declarations: [
@@ -21,10 +25,9 @@ describe('MatTabNavBar', () => {
         TabLinkWithNativeTabindexAttr,
       ],
       providers: [
-        {provide: Directionality, useFactory: () => ({
-          value: dir,
-          change: dirChange.asObservable()
-        })},
+        {provide: MAT_RIPPLE_GLOBAL_OPTIONS, useFactory: () => globalRippleOptions},
+        {provide: Directionality, useFactory: () =>
+            ({value: dir, change: dirChange.asObservable()})},
       ]
     });
 
@@ -113,29 +116,6 @@ describe('MatTabNavBar', () => {
         .toBe(true, 'Expected aria-disabled to be set to "true" if link is disabled.');
     });
 
-    it('should disable the ripples on all tabs when they are disabled on the nav bar', () => {
-      expect(fixture.componentInstance.tabLinks.toArray().every(tabLink => !tabLink.rippleDisabled))
-        .toBe(true, 'Expected every tab link to have ripples enabled');
-
-      fixture.componentInstance.disableRippleOnBar = true;
-      fixture.detectChanges();
-
-      expect(fixture.componentInstance.tabLinks.toArray().every(tabLink => tabLink.rippleDisabled))
-        .toBe(true, 'Expected every tab link to have ripples disabled');
-    });
-
-    it('should have the `disableRipple` from the tab take precendence over the nav bar', () => {
-      const firstTab = fixture.componentInstance.tabLinks.first;
-
-      expect(firstTab.rippleDisabled).toBe(false, 'Expected ripples to be enabled on first tab');
-
-      firstTab.disableRipple = true;
-      fixture.componentInstance.disableRippleOnBar = false;
-      fixture.detectChanges();
-
-      expect(firstTab.rippleDisabled).toBe(true, 'Expected ripples to be disabled on first tab');
-    });
-
     it('should update the tabindex if links are disabled', () => {
       const tabLinkElements = fixture.debugElement.queryAll(By.css('a'))
         .map(tabLinkDebugEl => tabLinkDebugEl.nativeElement);
@@ -150,45 +130,15 @@ describe('MatTabNavBar', () => {
         .toBe(true, 'Expected element to no longer be keyboard focusable if disabled.');
     });
 
-    it('should prevent default action for clicks if links are disabled', () => {
+    it('should make disabled links unclickable', () => {
       const tabLinkElement = fixture.debugElement.query(By.css('a')).nativeElement;
 
-      const mouseEvent = createMouseEvent('click');
-      spyOn(mouseEvent, 'preventDefault');
-      tabLinkElement.dispatchEvent(mouseEvent);
-      expect(mouseEvent.preventDefault).not.toHaveBeenCalled();
+      expect(getComputedStyle(tabLinkElement).pointerEvents).not.toBe('none');
 
       fixture.componentInstance.disabled = true;
       fixture.detectChanges();
 
-      const mouseEventWhileDisabled = createMouseEvent('click');
-      spyOn(mouseEventWhileDisabled, 'preventDefault');
-      tabLinkElement.dispatchEvent(mouseEventWhileDisabled);
-      expect(mouseEventWhileDisabled.preventDefault).toHaveBeenCalled();
-    });
-
-    it('should show ripples for tab links', () => {
-      const tabLink = fixture.debugElement.nativeElement.querySelector('.mat-tab-link');
-
-      dispatchMouseEvent(tabLink, 'mousedown');
-      dispatchMouseEvent(tabLink, 'mouseup');
-
-      expect(tabLink.querySelectorAll('.mat-ripple-element').length)
-        .toBe(1, 'Expected one ripple to show up if user clicks on tab link.');
-    });
-
-    it('should be able to disable ripples on a tab link', () => {
-      const tabLinkDebug = fixture.debugElement.query(By.css('a'));
-      const tabLinkElement = tabLinkDebug.nativeElement;
-      const tabLinkInstance = tabLinkDebug.injector.get(MatTabLink);
-
-      tabLinkInstance.disableRipple = true;
-
-      dispatchMouseEvent(tabLinkElement, 'mousedown');
-      dispatchMouseEvent(tabLinkElement, 'mouseup');
-
-      expect(tabLinkElement.querySelectorAll('.mat-ripple-element').length)
-        .toBe(0, 'Expected no ripple to show up if ripples are disabled.');
+      expect(getComputedStyle(tabLinkElement).pointerEvents).toBe('none');
     });
 
     it('should re-align the ink bar when the direction changes', () => {
@@ -270,7 +220,8 @@ describe('MatTabNavBar', () => {
       const fixture = TestBed.createComponent(TabLinkWithNativeTabindexAttr);
     fixture.detectChanges();
 
-    const tabLink = fixture.debugElement.query(By.directive(MatTabLink)).injector.get(MatTabLink);
+    const tabLink = fixture.debugElement.query(By.directive(MatTabLink))
+        .injector.get<MatTabLink>(MatTabLink);
 
     expect(tabLink.tabIndex)
       .toBe(5, 'Expected the tabIndex to be set from the native tabindex attribute.');
@@ -280,7 +231,8 @@ describe('MatTabNavBar', () => {
     const fixture = TestBed.createComponent(TabLinkWithTabIndexBinding);
     fixture.detectChanges();
 
-    const tabLink = fixture.debugElement.query(By.directive(MatTabLink)).injector.get(MatTabLink);
+    const tabLink = fixture.debugElement.query(By.directive(MatTabLink))
+        .injector.get<MatTabLink>(MatTabLink);
 
     expect(tabLink.tabIndex).toBe(0, 'Expected the tabIndex to be set to 0 by default.');
 
@@ -288,6 +240,72 @@ describe('MatTabNavBar', () => {
     fixture.detectChanges();
 
     expect(tabLink.tabIndex).toBe(3, 'Expected the tabIndex to be have been set to 3.');
+  });
+
+  describe('ripples', () => {
+    let fixture: ComponentFixture<SimpleTabNavBarTestApp>;
+
+    beforeEach(() => {
+      fixture = TestBed.createComponent(SimpleTabNavBarTestApp);
+      fixture.detectChanges();
+    });
+
+    it('should be disabled on all tab links when they are disabled on the nav bar', () => {
+      expect(fixture.componentInstance.tabLinks.toArray().every(tabLink => !tabLink.rippleDisabled))
+        .toBe(true, 'Expected every tab link to have ripples enabled');
+
+      fixture.componentInstance.disableRippleOnBar = true;
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.tabLinks.toArray().every(tabLink => tabLink.rippleDisabled))
+        .toBe(true, 'Expected every tab link to have ripples disabled');
+    });
+
+    it('should have the `disableRipple` from the tab take precedence over the nav bar', () => {
+      const firstTab = fixture.componentInstance.tabLinks.first;
+
+      expect(firstTab.rippleDisabled).toBe(false, 'Expected ripples to be enabled on first tab');
+
+      firstTab.disableRipple = true;
+      fixture.componentInstance.disableRippleOnBar = false;
+      fixture.detectChanges();
+
+      expect(firstTab.rippleDisabled).toBe(true, 'Expected ripples to be disabled on first tab');
+    });
+
+    it('should show up for tab link elements on mousedown', () => {
+      const tabLink = fixture.debugElement.nativeElement.querySelector('.mat-tab-link');
+
+      dispatchMouseEvent(tabLink, 'mousedown');
+      dispatchMouseEvent(tabLink, 'mouseup');
+
+      expect(tabLink.querySelectorAll('.mat-ripple-element').length)
+        .toBe(1, 'Expected one ripple to show up if user clicks on tab link.');
+    });
+
+    it('should be able to disable ripples on an individual tab link', () => {
+      const tabLinkDebug = fixture.debugElement.query(By.css('a'));
+      const tabLinkElement = tabLinkDebug.nativeElement;
+      const tabLinkInstance = tabLinkDebug.injector.get<MatTabLink>(MatTabLink);
+
+      tabLinkInstance.disableRipple = true;
+
+      dispatchMouseEvent(tabLinkElement, 'mousedown');
+      dispatchMouseEvent(tabLinkElement, 'mouseup');
+
+      expect(tabLinkElement.querySelectorAll('.mat-ripple-element').length)
+        .toBe(0, 'Expected no ripple to show up if ripples are disabled.');
+    });
+
+    it('should be able to disable ripples through global options at runtime', () => {
+      expect(fixture.componentInstance.tabLinks.toArray().every(tabLink => !tabLink.rippleDisabled))
+        .toBe(true, 'Expected every tab link to have ripples enabled');
+
+      globalRippleOptions.disabled = true;
+
+      expect(fixture.componentInstance.tabLinks.toArray().every(tabLink => tabLink.rippleDisabled))
+        .toBe(true, 'Expected every tab link to have ripples disabled');
+    });
   });
 });
 

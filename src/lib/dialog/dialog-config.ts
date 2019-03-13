@@ -89,6 +89,9 @@ export class MatDialogConfig<D = any> {
   /** ID of the element that describes the dialog. */
   ariaDescribedBy?: string | null = null;
 
+  /** ID of the element that labels the dialog. */
+  ariaLabelledBy?: string | null = null;
+
   /** Aria label to assign to the dialog element */
   ariaLabel?: string | null = null;
 
@@ -104,7 +107,11 @@ export class MatDialogConfig<D = any> {
   /** Scroll strategy to be used for the dialog. */
   scrollStrategy?: ScrollStrategy;
 
-  /** Whether the dialog should close when the user goes backwards/forwards in history. */
+  /**
+   * Whether the dialog should close when the user goes backwards/forwards in history.
+   * Note that this usually doesn't include clicking on links (unless the user is using
+   * the `HashLocationStrategy`).
+   */
   closeOnNavigation?: boolean = true;
 
   // TODO(jelbourn): add configuration for lifecycle hooks, ARIA labelling.

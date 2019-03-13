@@ -9,11 +9,28 @@
 import {AriaDescriber} from '@angular/cdk/a11y';
 import {coerceBooleanProperty} from '@angular/cdk/coercion';
 import {DOCUMENT} from '@angular/common';
-import {Directive, ElementRef, Inject, Input, NgZone, OnDestroy, Optional} from '@angular/core';
-import {ThemePalette} from '@angular/material/core';
+import {
+  Directive,
+  ElementRef,
+  Inject,
+  Input,
+  NgZone,
+  OnDestroy,
+  Optional,
+  Renderer2,
+} from '@angular/core';
+import {ThemePalette, mixinDisabled, CanDisableCtor, CanDisable} from '@angular/material/core';
+import {ANIMATION_MODULE_TYPE} from '@angular/platform-browser/animations';
 
 
 let nextId = 0;
+
+// Boilerplate for applying mixins to MatBadge.
+/** @docs-private */
+export class MatBadgeBase {}
+
+export const _MatBadgeMixinBase:
+    CanDisableCtor & typeof MatBadgeBase = mixinDisabled(MatBadgeBase);
 
 export type MatBadgePosition = 'above after' | 'above before' | 'below before' | 'below after';
 export type MatBadgeSize = 'small' | 'medium' | 'large';
@@ -21,6 +38,7 @@ export type MatBadgeSize = 'small' | 'medium' | 'large';
 /** Directive to display a text badge. */
 @Directive({
   selector: '[matBadge]',
+  inputs: ['disabled: matBadgeDisabled'],
   host: {
     'class': 'mat-badge',
     '[class.mat-badge-overlap]': 'overlap',
@@ -32,9 +50,10 @@ export type MatBadgeSize = 'small' | 'medium' | 'large';
     '[class.mat-badge-medium]': 'size === "medium"',
     '[class.mat-badge-large]': 'size === "large"',
     '[class.mat-badge-hidden]': 'hidden || !_hasContent',
+    '[class.mat-badge-disabled]': 'disabled',
   },
 })
-export class MatBadge implements OnDestroy {
+export class MatBadge extends _MatBadgeMixinBase implements OnDestroy, CanDisable {
   /** Whether the badge has any content. */
   _hasContent = false;
 
@@ -76,8 +95,14 @@ export class MatBadge implements OnDestroy {
   get description(): string { return this._description; }
   set description(newDescription: string) {
     if (newDescription !== this._description) {
+      const badgeElement = this._badgeElement;
       this._updateHostAriaDescription(newDescription, this._description);
       this._description = newDescription;
+
+      if (badgeElement) {
+        newDescription ? badgeElement.setAttribute('aria-label', newDescription) :
+            badgeElement.removeAttribute('aria-label');
+      }
     }
   }
   private _description: string;
@@ -101,8 +126,13 @@ export class MatBadge implements OnDestroy {
   constructor(
       @Optional() @Inject(DOCUMENT) private _document: any,
       private _ngZone: NgZone,
-      private _elementRef: ElementRef,
-      private _ariaDescriber: AriaDescriber) {}
+      private _elementRef: ElementRef<HTMLElement>,
+      private _ariaDescriber: AriaDescriber,
+      /** @breaking-change 8.0.0 Make _renderer a required param and remove _document. */
+      private _renderer?: Renderer2,
+      @Optional() @Inject(ANIMATION_MODULE_TYPE) private _animationMode?: string) {
+      super();
+    }
 
   /** Whether the badge is above the host or not */
   isAbove(): boolean {
@@ -115,8 +145,19 @@ export class MatBadge implements OnDestroy {
   }
 
   ngOnDestroy() {
-    if (this.description && this._badgeElement) {
-      this._ariaDescriber.removeDescription(this._badgeElement, this.description);
+    const badgeElement = this._badgeElement;
+
+    if (badgeElement) {
+      if (this.description) {
+        this._ariaDescriber.removeDescription(badgeElement, this.description);
+      }
+
+      // When creating a badge through the Renderer, Angular will keep it in an index.
+      // We have to destroy it ourselves, otherwise it'll be retained in memory.
+      // @breaking-change 8.0.0 remove _renderer from null.
+      if (this._renderer && this._renderer.destroyNode) {
+        this._renderer.destroyNode(badgeElement);
+      }
     }
   }
 
@@ -132,12 +173,21 @@ export class MatBadge implements OnDestroy {
 
   /** Creates the badge element */
   private _createBadgeElement(): HTMLElement {
-    const badgeElement = this._document.createElement('span');
+    // @breaking-change 8.0.0 Remove null check for _renderer
+    const rootNode = this._renderer || this._document;
+    const badgeElement = rootNode.createElement('span');
     const activeClass = 'mat-badge-active';
+    const contentClass = 'mat-badge-content';
 
+    // Clear any existing badges which may have persisted from a server-side render.
+    this._clearExistingBadges(contentClass);
     badgeElement.setAttribute('id', `mat-badge-content-${this._id}`);
-    badgeElement.classList.add('mat-badge-content');
+    badgeElement.classList.add(contentClass);
     badgeElement.textContent = this.content;
+
+    if (this._animationMode === 'NoopAnimations') {
+      badgeElement.classList.add('_mat-animation-noopable');
+    }
 
     if (this.description) {
       badgeElement.setAttribute('aria-label', this.description);
@@ -146,7 +196,7 @@ export class MatBadge implements OnDestroy {
     this._elementRef.nativeElement.appendChild(badgeElement);
 
     // animate in after insertion
-    if (typeof requestAnimationFrame === 'function') {
+    if (typeof requestAnimationFrame === 'function' && this._animationMode !== 'NoopAnimations') {
       this._ngZone.runOutsideAngular(() => {
         requestAnimationFrame(() => {
           badgeElement.classList.add(activeClass);
@@ -185,4 +235,18 @@ export class MatBadge implements OnDestroy {
     }
   }
 
+  /** Clears any existing badges that might be left over from server-side rendering. */
+  private _clearExistingBadges(cssClass: string) {
+    const element = this._elementRef.nativeElement;
+    let childCount = element.children.length;
+
+    // Use a reverse while, because we'll be removing elements from the list as we're iterating.
+    while (childCount--) {
+      const currentChild = element.children[childCount];
+
+      if (currentChild.classList.contains(cssClass)) {
+        element.removeChild(currentChild);
+      }
+    }
+  }
 }

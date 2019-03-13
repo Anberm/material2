@@ -1,22 +1,23 @@
 # List of all components / subpackages.
 
 CDK_PACKAGES = [
-  "coercion",
-  "keycodes",
-  "scrolling",
-  "accordion",
-  "observers",
   "a11y",
+  "accordion",
+  "bidi",
+  "coercion",
+  "collections",
+  "drag-drop",
+  "keycodes",
+  "layout",
+  "observers",
   "overlay",
   "platform",
-  "bidi",
-  "table",
-  "tree",
   "portal",
-  "layout",
+  "scrolling",
   "stepper",
+  "table",
   "text-field",
-  "collections",
+  "tree",
 ]
 
 CDK_TARGETS = ["//src/cdk"] + ["//src/cdk/%s" % p for p in CDK_PACKAGES]
@@ -24,7 +25,6 @@ CDK_TARGETS = ["//src/cdk"] + ["//src/cdk/%s" % p for p in CDK_PACKAGES]
 CDK_EXPERIMENTAL_PACKAGES = [
   "dialog",
   "scrolling",
-  "drag-drop",
 ]
 
 CDK_EXPERIMENTAL_TARGETS = ["//src/cdk-experimental"] + [
@@ -71,6 +71,12 @@ MATERIAL_PACKAGES = [
 
 MATERIAL_TARGETS = ["//src/lib:material"] + ["//src/lib/%s" % p for p in MATERIAL_PACKAGES]
 
+# List that references the sass libraries for each Material package. This can be used to create
+# the theming scss-bundle or to specify dependencies for the all-theme.scss file.
+MATERIAL_SCSS_LIBS = [
+  "//src/lib/%s:%s_scss_lib" % (p, p.replace('-', '_')) for p in MATERIAL_PACKAGES
+]
+
 # Each individual package uses a placeholder for the version of Angular to ensure they're
 # all in-sync. This map is passed to each ng_package rule to stamp out the appropriate
 # version for the placeholders.
@@ -104,3 +110,23 @@ ROLLUP_GLOBALS.update({
 ROLLUP_GLOBALS.update({
   "@angular/material/%s" % p: "ng.material.%s" % p for p in MATERIAL_PACKAGES
 })
+
+# UMD bundles for Angular packages and subpackges we depend on for development and testing.
+ANGULAR_LIBRARY_UMDS = [
+  "@npm//node_modules/@angular/animations:bundles/animations-browser.umd.js",
+  "@npm//node_modules/@angular/animations:bundles/animations.umd.js",
+  "@npm//node_modules/@angular/common:bundles/common-http-testing.umd.js",
+  "@npm//node_modules/@angular/common:bundles/common-http.umd.js",
+  "@npm//node_modules/@angular/common:bundles/common-testing.umd.js",
+  "@npm//node_modules/@angular/common:bundles/common.umd.js",
+  "@npm//node_modules/@angular/compiler:bundles/compiler-testing.umd.js",
+  "@npm//node_modules/@angular/compiler:bundles/compiler.umd.js",
+  "@npm//node_modules/@angular/core:bundles/core-testing.umd.js",
+  "@npm//node_modules/@angular/core:bundles/core.umd.js",
+  "@npm//node_modules/@angular/forms:bundles/forms.umd.js",
+  "@npm//node_modules/@angular/platform-browser-dynamic:bundles/platform-browser-dynamic-testing.umd.js",
+  "@npm//node_modules/@angular/platform-browser-dynamic:bundles/platform-browser-dynamic.umd.js",
+  "@npm//node_modules/@angular/platform-browser:bundles/platform-browser-animations.umd.js",
+  "@npm//node_modules/@angular/platform-browser:bundles/platform-browser-testing.umd.js",
+  "@npm//node_modules/@angular/platform-browser:bundles/platform-browser.umd.js",
+]

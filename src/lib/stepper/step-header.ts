@@ -21,6 +21,7 @@ import {Subscription} from 'rxjs';
 import {MatStepLabel} from './step-label';
 import {MatStepperIntl} from './stepper-intl';
 import {MatStepperIconContext} from './stepper-icon';
+import {CdkStepHeader, StepState} from '@angular/cdk/stepper';
 
 
 @Component({
@@ -35,14 +36,17 @@ import {MatStepperIconContext} from './stepper-icon';
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class MatStepHeader implements OnDestroy {
+export class MatStepHeader extends CdkStepHeader implements OnDestroy {
   private _intlSubscription: Subscription;
 
   /** State of the given step. */
-  @Input() state: string;
+  @Input() state: StepState;
 
   /** Label of the given step. */
   @Input() label: MatStepLabel | string;
+
+  /** Error message to display when there's an error. */
+  @Input() errorMessage: string;
 
   /** Overrides for the header icons, passed in via the stepper. */
   @Input() iconOverrides: {[key: string]: TemplateRef<MatStepperIconContext>};
@@ -59,18 +63,22 @@ export class MatStepHeader implements OnDestroy {
   /** Whether the given step is optional. */
   @Input() optional: boolean;
 
+  /** Whether the ripple should be disabled. */
+  @Input() disableRipple: boolean;
+
   constructor(
     public _intl: MatStepperIntl,
     private _focusMonitor: FocusMonitor,
-    private _element: ElementRef,
+    _elementRef: ElementRef<HTMLElement>,
     changeDetectorRef: ChangeDetectorRef) {
-    _focusMonitor.monitor(_element.nativeElement, true);
+    super(_elementRef);
+    _focusMonitor.monitor(_elementRef, true);
     this._intlSubscription = _intl.changes.subscribe(() => changeDetectorRef.markForCheck());
   }
 
   ngOnDestroy() {
     this._intlSubscription.unsubscribe();
-    this._focusMonitor.stopMonitoring(this._element.nativeElement);
+    this._focusMonitor.stopMonitoring(this._elementRef);
   }
 
   /** Returns string label of given step if it is a text label. */
@@ -85,7 +93,7 @@ export class MatStepHeader implements OnDestroy {
 
   /** Returns the host HTML element. */
   _getHostElement() {
-    return this._element.nativeElement;
+    return this._elementRef.nativeElement;
   }
 
   /** Template context variables that are exposed to the `matStepperIcon` instances. */
@@ -97,7 +105,16 @@ export class MatStepHeader implements OnDestroy {
     };
   }
 
-  focus() {
-    this._getHostElement().focus();
+  _getDefaultTextForState(state: StepState): string {
+    if (state == 'number') {
+      return `${this.index + 1}`;
+    }
+    if (state == 'edit') {
+      return 'create';
+    }
+    if (state == 'error') {
+      return 'warning';
+    }
+    return state;
   }
 }
